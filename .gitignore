@@ -1,0 +1,21 @@
+# Java / Gradle
+backend-api/build/
+backend-api/.gradle/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Go
+bot-service/bin/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Секреты
+.env
+
+# SDD workspace
+.superpowers/
