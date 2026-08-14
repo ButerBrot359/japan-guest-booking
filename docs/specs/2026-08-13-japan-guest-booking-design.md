@@ -89,7 +89,7 @@
 
 - **frontend** — React + TypeScript + Vite. SPA: календарь, форма брони,
   админка. В проде — статика за nginx.
-- **backend-api** — Spring Boot, Java 21, Gradle. Вся бизнес-логика,
+- **backend-api** — Spring Boot 4.0.x, Java 21, Gradle. Вся бизнес-логика,
   единственный владелец PostgreSQL. Миграции — Flyway.
 - **bot-service** — Go. Telegram long polling. Без своей БД и без
   бизнес-логики: рендерит уведомления из событий и передаёт действия

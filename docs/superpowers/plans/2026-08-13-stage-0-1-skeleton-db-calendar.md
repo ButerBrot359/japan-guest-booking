@@ -6,13 +6,13 @@
 
 **Architecture:** Монорепо с тремя сервисами; в этом плане строится только backend-api (Spring Boot + PostgreSQL + Flyway) и инфраструктура вокруг (docker-compose.dev, GitHub Actions). Kafka поднимается в dev-compose уже сейчас, но код её не использует до плана №2.
 
-**Tech Stack:** Java 21, Spring Boot 3.5.x (Gradle Kotlin DSL), PostgreSQL 16, Flyway, Testcontainers, GitHub Actions.
+**Tech Stack:** Java 21, Spring Boot 4.0.x (Gradle Kotlin DSL), PostgreSQL 16, Flyway, Testcontainers, GitHub Actions.
 
 **Spec:** `docs/specs/2026-08-13-japan-guest-booking-design.md`
 
 ## Global Constraints
 
-- Java 21, Spring Boot 3.5.x, Gradle (wrapper коммитится в репо).
+- Java 21, Spring Boot 4.0.x (4.0.7 на момент решения; 3.5.x снят с поддержки и недоступен на start.spring.io — решение от 2026-08-14), Gradle (wrapper коммитится в репо).
 - PostgreSQL 16; миграции только через Flyway, `ddl-auto: validate`.
 - Все даты — календарные дни (JST), бронь = полуинтервал `[check_in, check_out)`; блокировки админа — включительно `[start_date, end_date]`.
 - Формат ошибок API единый: `{"code": "...", "message": "..."}`.
@@ -179,7 +179,7 @@ git commit -m "chore: dev-окружение — Postgres и Kafka в Docker Com
 ```bash
 mkdir backend-api && curl https://start.spring.io/starter.tgz \
   -d type=gradle-project-kotlin -d language=java -d javaVersion=21 \
-  -d bootVersion=3.5.4 -d groupId=com.batowka -d artifactId=backend-api \
+  -d bootVersion=4.0.7 -d groupId=com.batowka -d artifactId=backend-api \
   -d name=GuestBooking -d packageName=com.batowka.guestbooking \
   -d dependencies=web,data-jpa,validation,flyway,postgresql,testcontainers,lombok \
   | tar -xzv -C backend-api
