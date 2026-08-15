@@ -40,5 +40,6 @@ dependencies {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+	// один форк = один контейнер на JVM (singleton в AbstractIntegrationTest), чтобы не плодить контейнеры
 	maxParallelForks = 1
 }
