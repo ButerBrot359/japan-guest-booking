@@ -1,6 +1,7 @@
 # Java / Gradle
 backend-api/build/
 backend-api/.gradle/
+*.log
 
 # Node
 frontend/node_modules/
