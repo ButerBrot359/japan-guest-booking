@@ -94,4 +94,22 @@ class CalendarServiceTest extends AbstractIntegrationTest {
                 LocalDate.parse("2026-01-01"), LocalDate.parse("2028-01-01")))
                 .isInstanceOf(InvalidCalendarRangeException.class);
     }
+
+    @Test
+    void blockedPeriodShownOverBookingOnOverlap() {
+        givenBooking("+81300000004", "Оля", "2027-04-10", "2027-04-15", "CONFIRMED");
+        jdbc.update("""
+                insert into blocked_periods(start_date, end_date, reason)
+                values ('2027-04-12', '2027-04-13', 'ремонт')
+                """);
+
+        Map<LocalDate, CalendarDay> map = byDate(calendar.getCalendar(
+                LocalDate.parse("2027-04-01"), LocalDate.parse("2027-04-30")));
+
+        assertThat(map.get(LocalDate.parse("2027-04-11")).status()).isEqualTo(DayStatus.BOOKED);
+        assertThat(map.get(LocalDate.parse("2027-04-12")).status()).isEqualTo(DayStatus.BLOCKED);
+        assertThat(map.get(LocalDate.parse("2027-04-12")).guestName()).isNull();
+        assertThat(map.get(LocalDate.parse("2027-04-13")).status()).isEqualTo(DayStatus.BLOCKED);
+        assertThat(map.get(LocalDate.parse("2027-04-14")).status()).isEqualTo(DayStatus.BOOKED);
+    }
 }
