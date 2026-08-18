@@ -1,6 +1,5 @@
-# Java / Gradle
-backend-api/build/
-backend-api/.gradle/
+# Java / Maven
+backend-api/target/
 *.log
 
 # Node
