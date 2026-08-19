@@ -29,31 +29,33 @@ func newConsumerCore(sender Sender) *consumerCore {
 	return &consumerCore{sender: sender, seen: make(map[string]bool)}
 }
 
-func (c *consumerCore) handle(ctx context.Context, raw []byte) {
+func (c *consumerCore) handle(ctx context.Context, raw []byte) error {
 	var env events.Envelope
 	if err := json.Unmarshal(raw, &env); err != nil {
 		log.Printf("битое событие, пропускаю: %v", err)
-		return
+		return nil
 	}
 	if c.seen[env.EventID] {
-		return // at-least-once: дубликат
+		return nil // at-least-once: дубликат
 	}
-	c.remember(env.EventID)
 	switch env.EventType {
 	case "WELCOME":
 		var w events.Welcome
 		if err := json.Unmarshal(env.Payload, &w); err != nil {
 			log.Printf("битый payload WELCOME: %v", err)
-			return
+			return nil
 		}
 		text := "Привет, " + w.Name + "! Telegram привязан — теперь сюда будут " +
 			"приходить коды подтверждения и уведомления о бронях."
 		if err := c.sender.SendMessage(ctx, w.ChatID, text, false); err != nil {
-			log.Printf("отправка WELCOME chat_id=%d: %v", w.ChatID, err)
+			return err // Ошибка отправки — не коммитим, потом повторим
 		}
+		c.remember(env.EventID) // remember ТОЛЬКО после успешной отправки
 	default:
 		log.Printf("незнакомый event_type %q — пропускаю (совместимость вперёд)", env.EventType)
+		return nil
 	}
+	return nil
 }
 
 func (c *consumerCore) remember(eventID string) {
@@ -82,7 +84,7 @@ func NewConsumer(brokers []string, sender Sender) *Consumer {
 	}
 }
 
-// Run читает до отмены контекста; offset коммитится ПОСЛЕ обработки (at-least-once).
+// Run читает до отмены контекста; offset коммитится ТОЛЬКО после успешной обработки (at-least-once).
 func (c *Consumer) Run(ctx context.Context) {
 	for ctx.Err() == nil {
 		msg, err := c.reader.FetchMessage(ctx)
@@ -98,7 +100,15 @@ func (c *Consumer) Run(ctx context.Context) {
 			}
 			continue
 		}
-		c.core.handle(ctx, msg.Value)
+		if err := c.core.handle(ctx, msg.Value); err != nil {
+			log.Printf("обработка события: %v — повтор через 3с", err)
+			select {
+			case <-time.After(3 * time.Second):
+			case <-ctx.Done():
+				return
+			}
+			continue
+		}
 		if err := c.reader.CommitMessages(ctx, msg); err != nil {
 			log.Printf("kafka commit: %v", err)
 		}
