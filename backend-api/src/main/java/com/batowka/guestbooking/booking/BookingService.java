@@ -1,5 +1,6 @@
 package com.batowka.guestbooking.booking;
 
+import com.batowka.guestbooking.messaging.OutboxWriter;
 import com.batowka.guestbooking.otp.OtpService;
 import com.batowka.guestbooking.user.UserAccount;
 import com.batowka.guestbooking.user.UserAccountRepository;
@@ -8,6 +9,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -27,6 +29,7 @@ public class BookingService {
     private final UserAccountRepository users;
     private final OtpService otp;
     private final JdbcTemplate jdbc;
+    private final OutboxWriter outbox;
 
     public record WillReplace(long id, LocalDate checkIn, LocalDate checkOut) {
     }
@@ -83,5 +86,76 @@ public class BookingService {
                 || checkIn.isBefore(LocalDate.now(JST))) {
             throw new InvalidBookingDatesException();
         }
+    }
+
+    @Transactional
+    public void confirm(Long userId, long bookingId, String code) {
+        UserAccount user = requireTelegramLinked(userId);
+        requireOwnership(bookingId, userId);
+        OtpService.ChallengeResult ch = otp.verify(userId, bookingId, code);
+        switch (ch.action()) {
+            case "CREATE_BOOKING" -> confirmCreate(user, bookingId);
+            case "RESCHEDULE" -> applyReschedule(user, bookingId, ch.payload());
+            case "CANCEL" -> applyCancel(user, bookingId);
+            default -> throw new IllegalStateException("Неизвестный action: " + ch.action());
+        }
+    }
+
+    private void confirmCreate(UserAccount user, long bookingId) {
+        // порядок обязателен: частичный уникальный индекс «одна CONFIRMED на гостя»
+        bookings.findFirstByUserIdAndStatusOrderByIdDesc(user.getId(), BookingStatus.CONFIRMED)
+                .ifPresent(old -> {
+                    int n = jdbc.update("""
+                            update bookings set status = 'CANCELLED', cancelled_by = 'GUEST'
+                            where id = ? and status = 'CONFIRMED'
+                            """, old.getId());
+                    if (n == 1) {
+                        notifyBookingEvent(user, "BOOKING_CANCELLED",
+                                old.getCheckIn(), old.getCheckOut());
+                    }
+                });
+        int updated = jdbc.update("""
+                update bookings set status = 'CONFIRMED'
+                where id = ? and status = 'PENDING_OTP'
+                """, bookingId);
+        if (updated == 0) {
+            throw new BookingExpiredException();
+        }
+        Map<String, Object> dates = jdbc.queryForMap(
+                "select check_in, check_out from bookings where id = ?", bookingId);
+        notifyBookingEvent(user, "BOOKING_CONFIRMED",
+                ((java.sql.Date) dates.get("check_in")).toLocalDate(),
+                ((java.sql.Date) dates.get("check_out")).toLocalDate());
+    }
+
+    // заглушки — реализуются в Task 6; до тех пор недостижимы (челленджи этих
+    // action появятся только в Task 6)
+    private void applyReschedule(UserAccount user, long bookingId, JsonNode payload) {
+        throw new UnsupportedOperationException("Task 6");
+    }
+
+    private void applyCancel(UserAccount user, long bookingId) {
+        throw new UnsupportedOperationException("Task 6");
+    }
+
+    /** Событие гостю + админу (если у админа привязан Telegram). */
+    void notifyBookingEvent(UserAccount guest, String eventType,
+                            LocalDate checkIn, LocalDate checkOut) {
+        outboxEvent(guest.getTelegramChatId(), guest, eventType, checkIn, checkOut);
+        jdbc.query("""
+                select telegram_chat_id from users
+                where role = 'ADMIN' and telegram_chat_id is not null
+                """, rs -> {
+            outboxEvent(rs.getLong(1), guest, eventType, checkIn, checkOut);
+        });
+    }
+
+    private void outboxEvent(Long chatId, UserAccount guest, String eventType,
+                             LocalDate checkIn, LocalDate checkOut) {
+        outbox.write("notifications.outbound", eventType, Map.of(
+                "chat_id", chatId,
+                "guest_name", guest.getName(),
+                "check_in", checkIn.toString(),
+                "check_out", checkOut.toString()));
     }
 }
