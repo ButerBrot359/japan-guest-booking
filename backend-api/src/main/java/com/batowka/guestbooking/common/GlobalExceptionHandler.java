@@ -1,8 +1,12 @@
 package com.batowka.guestbooking.common;
 
+import com.batowka.guestbooking.auth.InvalidPhoneException;
+import com.batowka.guestbooking.auth.UnknownPhoneException;
 import com.batowka.guestbooking.calendar.InvalidCalendarRangeException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -29,5 +33,29 @@ public class GlobalExceptionHandler {
     public ApiError missingParam(MissingServletRequestParameterException ex) {
         return new ApiError("VALIDATION_ERROR",
                 "Не хватает параметра '" + ex.getParameterName() + "'");
+    }
+
+    @ExceptionHandler(UnknownPhoneException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ApiError unknownPhone(UnknownPhoneException ex) {
+        return new ApiError("UNKNOWN_PHONE", ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidPhoneException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError invalidPhone(InvalidPhoneException ex) {
+        return new ApiError("VALIDATION_ERROR", ex.getMessage());
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError invalidBody(MethodArgumentNotValidException ex) {
+        return new ApiError("VALIDATION_ERROR", "Некорректное тело запроса");
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError unreadableBody(HttpMessageNotReadableException ex) {
+        return new ApiError("VALIDATION_ERROR", "Тело запроса не читается");
     }
 }
