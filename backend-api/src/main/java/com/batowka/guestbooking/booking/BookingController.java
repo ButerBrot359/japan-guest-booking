@@ -63,4 +63,10 @@ public class BookingController {
         bookingService.requestCancel((Long) auth.getPrincipal(), id);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/{id}/resend-code")
+    public ResponseEntity<Void> resendCode(@PathVariable long id, Authentication auth) {
+        bookingService.resendCode((Long) auth.getPrincipal(), id);
+        return ResponseEntity.noContent().build();
+    }
 }

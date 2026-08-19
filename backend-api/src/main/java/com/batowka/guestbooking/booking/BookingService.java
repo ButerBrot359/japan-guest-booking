@@ -214,4 +214,19 @@ public class BookingService {
                 "check_in", checkIn.toString(),
                 "check_out", checkOut.toString()));
     }
+
+    @Transactional
+    public void resendCode(Long userId, long bookingId) {
+        UserAccount user = requireTelegramLinked(userId);
+        requireOwnership(bookingId, userId);
+        otp.resend(user, bookingId);
+    }
+
+    /** Активная бронь для /api/me: CONFIRMED, иначе свежайшая PENDING_OTP. */
+    @Transactional(readOnly = true)
+    public Optional<Booking> activeBooking(Long userId) {
+        return bookings.findFirstByUserIdAndStatusOrderByIdDesc(userId, BookingStatus.CONFIRMED)
+                .or(() -> bookings.findFirstByUserIdAndStatusOrderByIdDesc(
+                        userId, BookingStatus.PENDING_OTP));
+    }
 }
