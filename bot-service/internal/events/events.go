@@ -26,6 +26,20 @@ type Welcome struct {
 	Name   string `json:"name"`
 }
 
+type OtpCode struct {
+	ChatID    int64  `json:"chat_id"`
+	Code      string `json:"code"`
+	Action    string `json:"action"`
+	ExpiresAt string `json:"expires_at"`
+}
+
+type BookingEvent struct {
+	ChatID    int64  `json:"chat_id"`
+	GuestName string `json:"guest_name"`
+	CheckIn   string `json:"check_in"`
+	CheckOut  string `json:"check_out"`
+}
+
 // NewUUID генерирует UUID v4 без внешних зависимостей.
 func NewUUID() string {
 	b := make([]byte, 16)

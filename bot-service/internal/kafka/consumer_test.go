@@ -64,7 +64,7 @@ func TestUnknownEventTypeIsIgnored(t *testing.T) {
 	c := newConsumerCore(sender)
 
 	_ = c.handle(context.Background(), []byte(`{"event_id":"e-2","occurred_at":"2026-08-19T12:00:00Z",`+
-		`"event_type":"OTP_CODE","payload":{}}`))
+		`"event_type":"UNKNOWN_TYPE","payload":{}}`))
 
 	if len(sender.sent) != 0 {
 		t.Fatal("незнакомый тип не должен ничего отправлять")
@@ -83,5 +83,42 @@ func TestFailedSendIsRetriedNotDeduplicated(t *testing.T) {
 	}
 	if len(sender.sent) != 1 {
 		t.Fatalf("ожидал ровно одну доставку, получил %d", len(sender.sent))
+	}
+}
+
+func eventJSON(id, eventType, payload string) []byte {
+	return []byte(`{"event_id":"` + id + `","occurred_at":"2026-08-19T12:00:00Z",` +
+		`"event_type":"` + eventType + `","payload":` + payload + `}`)
+}
+
+func TestOtpCodeIsRendered(t *testing.T) {
+	sender := &fakeSender{}
+	c := newConsumerCore(sender)
+
+	_ = c.handle(context.Background(), eventJSON("e-otp", "OTP_CODE",
+		`{"chat_id":555,"code":"482913","action":"CREATE_BOOKING","expires_at":"2026-08-19T12:05:00Z"}`))
+
+	if len(sender.sent) != 1 || !strings.Contains(sender.sent[0], "482913") ||
+		!strings.Contains(sender.sent[0], "5 минут") {
+		t.Fatalf("ожидал код и срок в сообщении: %v", sender.sent)
+	}
+}
+
+func TestBookingEventsAreRendered(t *testing.T) {
+	sender := &fakeSender{}
+	c := newConsumerCore(sender)
+	payload := `{"chat_id":555,"guest_name":"Маша","check_in":"2027-06-01","check_out":"2027-06-05"}`
+
+	_ = c.handle(context.Background(), eventJSON("e-c", "BOOKING_CONFIRMED", payload))
+	_ = c.handle(context.Background(), eventJSON("e-x", "BOOKING_CANCELLED", payload))
+	_ = c.handle(context.Background(), eventJSON("e-r", "BOOKING_RESCHEDULED", payload))
+
+	if len(sender.sent) != 3 {
+		t.Fatalf("ожидал 3 сообщения: %d", len(sender.sent))
+	}
+	for i, want := range []string{"подтверждена", "отменена", "перенесена"} {
+		if !strings.Contains(sender.sent[i], want) || !strings.Contains(sender.sent[i], "Маша") {
+			t.Errorf("сообщение %d: ожидал %q и имя: %q", i, want, sender.sent[i])
+		}
 	}
 }

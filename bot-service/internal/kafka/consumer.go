@@ -47,15 +47,25 @@ func (c *consumerCore) handle(ctx context.Context, raw []byte) error {
 		}
 		text := "Привет, " + w.Name + "! Telegram привязан — теперь сюда будут " +
 			"приходить коды подтверждения и уведомления о бронях."
-		if err := c.sender.SendMessage(ctx, w.ChatID, text, false); err != nil {
-			return err // Ошибка отправки — не коммитим, потом повторим
+		return c.send(ctx, env.EventID, w.ChatID, text)
+	case "OTP_CODE":
+		var p events.OtpCode
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			log.Printf("битый payload OTP_CODE: %v", err)
+			return nil
 		}
-		c.remember(env.EventID) // remember ТОЛЬКО после успешной отправки
+		return c.send(ctx, env.EventID, p.ChatID,
+			"Код подтверждения: "+p.Code+". Действует 5 минут.")
+	case "BOOKING_CONFIRMED":
+		return c.renderBooking(ctx, env, "Бронь подтверждена")
+	case "BOOKING_CANCELLED":
+		return c.renderBooking(ctx, env, "Бронь отменена")
+	case "BOOKING_RESCHEDULED":
+		return c.renderBooking(ctx, env, "Бронь перенесена")
 	default:
 		log.Printf("незнакомый event_type %q — пропускаю (совместимость вперёд)", env.EventType)
 		return nil
 	}
-	return nil
 }
 
 func (c *consumerCore) remember(eventID string) {
@@ -65,6 +75,24 @@ func (c *consumerCore) remember(eventID string) {
 		delete(c.seen, c.order[0])
 		c.order = c.order[1:]
 	}
+}
+
+func (c *consumerCore) send(ctx context.Context, eventID string, chatID int64, text string) error {
+	if err := c.sender.SendMessage(ctx, chatID, text, false); err != nil {
+		return err
+	}
+	c.remember(eventID)
+	return nil
+}
+
+func (c *consumerCore) renderBooking(ctx context.Context, env events.Envelope, prefix string) error {
+	var p events.BookingEvent
+	if err := json.Unmarshal(env.Payload, &p); err != nil {
+		log.Printf("битый payload %s: %v", env.EventType, err)
+		return nil
+	}
+	return c.send(ctx, env.EventID, p.ChatID,
+		prefix+": "+p.GuestName+", заезд "+p.CheckIn+", выезд "+p.CheckOut+".")
 }
 
 // Consumer — Kafka-транспорт вокруг consumerCore.
