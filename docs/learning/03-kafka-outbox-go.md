@@ -1,3 +1,129 @@
+---
+tutor:
+  stage: 3
+  title: "Kafka, transactional outbox, основы Go"
+  topics:
+    - id: kafka-topic-partition-offset-group
+      section: "Топик, партиция, offset, consumer group; KRaft"
+      code_anchors:
+        - path: contracts/notifications-outbound.md
+          symbol: "1 партиция"
+          concept: "осознанный выбор одной партиции — порядок важнее пропускной способности при таком объёме"
+        - path: backend-api/src/main/java/com/batowka/guestbooking/messaging/ContactSharedConsumer.java
+          symbol: "@KafkaListener(topics = \"telegram.inbound\", groupId = \"backend-api\")"
+          concept: "consumer group backend-api — один читатель, один offset"
+        - path: bot-service/internal/kafka/consumer.go
+          symbol: "kafkago.ReaderConfig.GroupID"
+          concept: "consumer group bot-service со своей стороны потока"
+        - path: backend-api/src/test/java/com/batowka/guestbooking/AbstractIntegrationTest.java
+          symbol: "KafkaContainer(\"apache/kafka:3.9.1\")"
+          concept: "тег 3.9.1, а не 3.9.0 из dev-compose — обходит баг KAFKA-18281"
+      quiz_seeds:
+        - "Почему у обоих топиков ровно одна партиция, а не несколько для параллелизма?"
+        - "Чем отличается набор listener'ов в docker-compose.dev.yml от того, что генерирует Testcontainers, и почему это важно для версии 3.9.0 против 3.9.1?"
+      decisions:
+        - choice: "1 партиция на каждый топик (notifications.outbound, telegram.inbound)"
+          alternatives: "несколько партиций для параллелизма чтения/записи"
+          why: "родительская спека §7 и contracts/notifications-outbound.md: «1 партиция» — Kafka гарантирует порядок только внутри одной партиции; при объёме «несколько уведомлений в день на семью гостей» пропускная способность не узкое место, а порядок важен — на нём держится сам OutboxPublisher, шлющий строки по возрастанию id"
+          price: "жёсткий потолок пропускной способности и параллелизма чтения — один консьюмер на топик физически не может читать быстрее, чем позволяет одна партиция; для роста нагрузки это стало бы проблемой, но не для текущего масштаба проекта"
+      pitfalls:
+        - "Testcontainers поднимает Kafka образом apache/kafka:3.9.1, а не 3.9.0 из docker-compose.dev.yml — потому что 3.9.0 несёт баг KAFKA-18281: контроллер в KRaft некорректно валидирует 0.0.0.0 у неанонсируемого CONTROLLER-listener'а, а именно так Testcontainers настраивает контейнер автоматически (контейнер падает на «Transitioning from RECOVERY to RUNNING»). docker-compose.dev.yml эту комбинацию не задевает — там CONTROLLER-listener прописан вручную по-другому, поэтому dev-окружение спокойно живёт на 3.9.0. Мораль: одна и та же версия образа может быть безопасна в одной конфигурации и ломаться в другой; когда контейнер падает на старте необъяснимой ошибкой при конфигурации с виду правильной — стоит проверить changelog конкретного патч-релиза образа, а не сразу переписывать свой конфиг."
+    - id: transactional-outbox
+      section: "Transactional outbox"
+      code_anchors:
+        - path: backend-api/src/main/java/com/batowka/guestbooking/messaging/OutboxWriter.java
+          symbol: "OutboxWriter.write"
+          concept: "@Transactional(propagation = Propagation.MANDATORY) — нельзя вызвать вне чужой транзакции"
+        - path: backend-api/src/main/java/com/batowka/guestbooking/messaging/ContactSharedConsumer.java
+          symbol: "ContactSharedConsumer.link"
+          concept: "users.save(user) и outbox.write(...) коммитятся или откатываются вместе, в одной @Transactional"
+        - path: backend-api/src/main/java/com/batowka/guestbooking/messaging/OutboxPublisher.java
+          symbol: "OutboxPublisher.publishPending"
+          concept: "@Scheduled(fixedDelay = 2000), выход из метода при первой же ошибке отправки сохраняет порядок"
+      quiz_seeds:
+        - "Что произойдёт со строкой outbox, если Kafka окажется недоступна ровно в момент publishPending?"
+        - "Почему write() физически нельзя вызвать вне чужой транзакции — что бы сломалось, если бы это было разрешено?"
+      decisions:
+        - choice: "поллинг outbox через @Scheduled(fixedDelay = 2000) — OutboxPublisher раз в 2 секунды выбирает неотправленные строки и шлёт их в Kafka"
+          alternatives: "CDC (Change Data Capture) через Debezium — читать WAL Postgres напрямую и публиковать изменения без опроса таблицы (типовая альтернатива паттерна outbox, в проекте явно не рассматривалась)"
+          why: "минимальная инфраструктура — не нужен отдельный коннектор/кластер Kafka Connect; при объёме «несколько уведомлений в день» задержка в пределах 2 секунд не имеет значения, а поллинг проще понять и отладить в учебном проекте"
+          price: "лишняя периодическая нагрузка на БД даже когда очередь пуста (SELECT каждые 2 секунды), и задержка доставки до 2 секунд против near-realtime у CDC — для масштаба проекта цена признана приемлемой"
+        - choice: "не трогать payload::text вручную — consumer'ы парсят полноценным JSON-парсером"
+          alternatives: "чистить строку payload регулярным выражением перед отправкой (как в ранней версии — payload.replaceAll(...))"
+          why: "jsonb в Postgres при выдаче текстом сам расставляет пробелы после : и , — это нормальное текстовое представление валидного JSON, а не искажение, которое нужно чистить"
+          price: "то, что кажется косметикой (лишние пробелы в тексте), безопасно оставить как есть только если ВСЕ потребители действительно парсят JSON, а не ищут в нём подстроки — это неявное требование к любому будущему консьюмеру топика"
+      pitfalls:
+        - "Ранняя версия OutboxPublisher чистила текст jsonb-колонки регулярным выражением payload.replaceAll(\": \", \":\").replaceAll(\", \", \",\") перед отправкой в Kafka — регулярка резала пробелы везде, где встречала эти подстроки, не отличая разделитель JSON от точно такой же последовательности символов внутри значения строки. Реальный контрпример из коммита e312ce2: «Смирнов, Иван: старший» превращалось в «Смирнов,Иван:старший» — ломались не разделители, а данные гостя. Мораль: регулярка видит последовательность символов, а не структуру документа; тесты заодно переписали со сравнения подстрок (contains()) на сравнение распарсенного JSON (JsonNode), что само по себе не даёт повторить эту ошибку."
+    - id: at-least-once-idempotency
+      section: "At-least-once и идемпотентность"
+      code_anchors:
+        - path: backend-api/src/main/java/com/batowka/guestbooking/messaging/ContactSharedConsumer.java
+          symbol: "ContactSharedConsumer.onEvent"
+          concept: "проверка event_id в processed_events и вставка туда же — атомарно в одной @Transactional с эффектом"
+        - path: bot-service/internal/kafka/consumer.go
+          symbol: "consumerCore.seen / dedupCap"
+          concept: "in-memory map[string]bool на 1000 записей — best-effort дедуп без персистентности"
+        - path: bot-service/internal/kafka/consumer.go
+          symbol: "Consumer.Run"
+          concept: "offset коммитится после обработки (CommitMessages после c.core.handle) — at-least-once"
+      quiz_seeds:
+        - "Почему дедупликация на backend строже (транзакционная таблица), чем на bot-service (in-memory map)?"
+        - "Что случится с consumerCore.seen при рестарте bot-service, и почему это приемлемый риск именно для WELCOME-сообщений?"
+      decisions:
+        - choice: "разная строгость дедупликации: backend — таблица processed_events внутри той же @Transactional, что и бизнес-эффект; bot-service — map[string]bool в памяти на 1000 записей, без персистентности"
+          alternatives: "одинаковая (транзакционная, персистентная) дедупликация на обеих сторонах"
+          why: "родительская спека §7 и дизайн этапа 3 §5: цена ошибки разная — на backend дубликат CONTACT_SHARED рискует некорректно повторно изменить состояние users (источник истины), на bot-service повторный WELCOME — это просто второе одинаковое сообщение в чате, которое ничего не портит и не задваивает данные в базе"
+          price: "consumerCore.seen на bot-service теряется при рестарте процесса и физически ограничена 1000 записей (remember вытесняет самую старую) — слишком поздний дубликат в принципе может проскочить незамеченным; это осознанно принятый риск, а не гарантия"
+    - id: go-basics
+      section: "Основы Go на нашем коде"
+      code_anchors:
+        - path: bot-service/cmd/bot/main.go
+          symbol: "main — wg.Add(2), go func(), signal.NotifyContext, wg.Wait()"
+          concept: "graceful shutdown: обе горутины дожидаются отмены ctx перед Close()"
+        - path: bot-service/internal/telegram/poller.go
+          symbol: "Poller.handle / type ContactPublisher interface"
+          concept: "интерфейс объявлен на стороне потребителя, а не реализации — структурная типизация без implements"
+        - path: bot-service/internal/telegram/poller_test.go
+          symbol: "fakeAPI / fakePublisher"
+          concept: "тестовые подмены без библиотеки моков — просто структуры, удовлетворяющие интерфейсу"
+      quiz_seeds:
+        - "Как Go решает, что *telegram.Client удовлетворяет интерфейсу Sender, без явного implements?"
+        - "Что было бы, если бы poller.Run не проверял ctx.Err() в цикле — как бы это сломало graceful shutdown?"
+      decisions:
+        - choice: "bot-service не хранит бизнес-логику и не имеет своей БД — только рендер уведомлений и трансляция действий пользователя в события"
+          alternatives: "дать bot-service собственную логику/состояние (например, хранить прогресс диалога локально)"
+          why: "родительская спека §4: «Принцип границы: bot-service ничего не знает про брони. Он умеет доставить сообщение в chat_id и сообщить, что пользователь сделал X в боте»"
+          price: "bot-service не может сам ничего решить и содержательно ответить без backend — при недоступности backend/Kafka он умеет только продолжать принимать апдейты Telegram, но не завершить ни один сценарий"
+        - choice: "свой тонкий Telegram-клиент на net/http (GetUpdates/SendMessage вручную) вместо готовой библиотеки"
+          alternatives: "готовая Go-библиотека для Telegram Bot API (например, go-telegram-bot-api)"
+          why: "дизайн этапа 3 §1/§4: bot-service должен оставаться тонким; учебная цель — разобраться, как работает long polling и HTTP поверх Bot API, а не спрятать это за чужой абстракцией; заодно тестируется через httptest.NewServer без единой моковой библиотеки"
+          price: "приходится вручную реализовывать то, что библиотека дала бы бесплатно — таймауты long-polling, ретраи, разбор всех типов апдейтов Bot API; в проекте реализовано только то, что реально нужно (/start, контакт, отправка сообщений)"
+    - id: onboarding-security
+      section: "Безопасность онбординга"
+      code_anchors:
+        - path: bot-service/internal/telegram/poller.go
+          symbol: "Poller.handle — m.Contact.UserID != m.From.ID"
+          concept: "контакт принимается только если он принадлежит тому же Telegram-аккаунту, что написал боту"
+        - path: backend-api/src/main/java/com/batowka/guestbooking/messaging/ContactSharedConsumer.java
+          symbol: "ContactSharedConsumer.handleContactShared"
+          concept: "users.findByPhone(...).ifPresent(...) — телефона нет в списке гостей — молча игнорируем"
+        - path: contracts/telegram-inbound.md
+          symbol: "CONTACT_SHARED"
+          concept: "contact.user_id == from.id — оба поля подтверждает сам Telegram, а не клиент"
+      quiz_seeds:
+        - "Почему бот не отвечает ничего разного на «чужой контакт» и на «телефон не в списке» — чем это отличается от единого 401 у admin-логина?"
+        - "Кто именно устанавливает поля from.id и contact.user_id — клиент или сервер Telegram, и почему это важно для проверки?"
+      decisions:
+        - choice: "повторный онбординг: тот же chat_id → ничего не делать (без второго WELCOME); другой chat_id (новый Telegram-аккаунт) → обновить привязку и отправить WELCOME на новый chat_id"
+          alternatives: "всегда отправлять WELCOME повторно при любом повторном CONTACT_SHARED, независимо от того, сменился chat_id или нет"
+          why: "дизайн этапа 3 §3: привязка идемпотентна по смыслу — то, что тот же человек ещё раз поделился тем же контактом, не новость и не повод присылать приветствие заново; а смена Telegram-аккаунта — реальное изменение состояния, о котором стоит уведомить"
+          price: "логика перестаёт быть однострочной (findByPhone → link) — нужно явно сравнивать текущий и новый chat_id и различать два случая, что легко упростить по ошибке при следующей правке"
+  bugs_and_lessons:
+    - "Ранняя версия OutboxPublisher чистила payload через payload.replaceAll(\": \", \":\").replaceAll(\", \", \",\") перед отправкой — регулярка резала пробелы везде, где встречала эти подстроки, не отличая разделитель JSON от точно такой же последовательности символов внутри значения строки (пример из коммита e312ce2: «Смирнов, Иван: старший» → «Смирнов,Иван:старший»). Исправление — не трогать текст руками (payload::text из jsonb уже валиден), а тесты заодно переписаны на сравнение распарсенного JSON вместо contains() по подстрокам. Мораль: регулярка видит последовательность символов, а не структуру документа."
+    - "Постскриптум: на живом смоуке bot-service стартовал раньше первой публикации backend в notifications.outbound, топика ещё не существовало (ленивое создание), а consumer group kafka-go в этой ситуации не падает и не логирует ошибку — молча висит без партиций. WELCOME дошёл только после рестарта бота; сообщение не потерялось (durability лога), но пользователь не получил его сразу. Исправлено детерминированным созданием топиков при старте (KafkaTopicsConfig на backend, EnsureTopic на bot-service). Мораль: тихие зависания хуже громких ошибок, а порядок запуска сервисов не должен быть негласным протоколом."
+  prerequisites: [kafka-kraft-listeners, error-disclosure-safety]
+---
+
 # Этап 3: Kafka, transactional outbox, основы Go
 
 Разбор того, что мы собрали в этапе 3 — связь backend-api и bot-service через
@@ -75,6 +201,15 @@ CONTROLLER-листенер прописан вручную по-другому,
 правильная, стоит проверить список изменений конкретного патч-релиза образа, а не
 сразу переписывать свой конфиг.
 
+> **Разбор кода:** открой `contracts/notifications-outbound.md` — смотри
+> строку про число партиций. Открой
+> `backend-api/src/main/java/com/batowka/guestbooking/messaging/ContactSharedConsumer.java`
+> — смотри аннотацию `@KafkaListener` над `onEvent` и `groupId`. Открой
+> `bot-service/internal/kafka/consumer.go` — смотри `GroupID: "bot-service"`
+> внутри `kafkago.ReaderConfig`. Открой
+> `backend-api/src/test/java/com/batowka/guestbooking/AbstractIntegrationTest.java`
+> — смотри тег образа `KafkaContainer` и комментарий про KAFKA-18281 рядом.
+
 ## 2. Transactional outbox
 
 Проблема, которую решает outbox, звучит по-бытовому просто: «бронь создалась,
@@ -138,6 +273,16 @@ users.save(user); outbox.write("notifications.outbound", "WELCOME", ...)` —
 на строковое совпадение не заметил бы разницы «пробелы переставлены», а тест
 на распарсенное значение поля — заметит любое искажение содержимого.
 
+> **Разбор кода:** открой
+> `backend-api/src/main/java/com/batowka/guestbooking/messaging/OutboxWriter.java`
+> — смотри `write` и аннотацию `@Transactional(propagation = Propagation.MANDATORY)`.
+> Открой
+> `backend-api/src/main/java/com/batowka/guestbooking/messaging/ContactSharedConsumer.java`
+> — смотри `link`: две строки (`users.save`, `outbox.write`) внутри одной
+> `@Transactional`. Открой
+> `backend-api/src/main/java/com/batowka/guestbooking/messaging/OutboxPublisher.java`
+> — смотри `publishPending` и что происходит при исключении из `kafka.send`.
+
 ## 3. At-least-once и идемпотентность
 
 «Ровно один раз» на практике — миф в том смысле, что его
@@ -181,6 +326,13 @@ users.save(user); outbox.write("notifications.outbound", "WELCOME", ...)` —
 от этого не меняется дважды). Тратить транзакционную, персистентную
 дедупликацию там, где цена промаха — лишнее сообщение в чате, было бы
 избыточной инженерией; in-memory best-effort ровно соразмерен риску.
+
+> **Разбор кода:** открой
+> `backend-api/src/main/java/com/batowka/guestbooking/messaging/ContactSharedConsumer.java`
+> — смотри `onEvent`: проверка `processed_events` и вставка в неё внутри
+> одной `@Transactional`. Открой `bot-service/internal/kafka/consumer.go` —
+> смотри `consumerCore.seen`, `dedupCap` и `Consumer.Run` (порядок: сначала
+> `c.core.handle`, потом `c.reader.CommitMessages`).
 
 ## 4. Основы Go на нашем коде
 
@@ -234,6 +386,13 @@ server.URL)` заставляет `Client` ходить туда вместо `h
 код самого `Client` при этом ни строчки не знает, что это тест — он
 по-настоящему делает HTTP-запрос, просто не в интернет, а на соседний порт.
 
+> **Разбор кода:** открой `bot-service/cmd/bot/main.go` — смотри `wg.Add(2)`,
+> обе горутины `go func()` и `wg.Wait()` в конце. Открой
+> `bot-service/internal/telegram/poller.go` — смотри `type ContactPublisher
+> interface` и `handle`. Открой
+> `bot-service/internal/telegram/poller_test.go` — смотри `fakeAPI` и
+> `fakePublisher`.
+
 ## 5. Безопасность онбординга
 
 Бот принимает контакт только если он принадлежит тому же человеку, что
@@ -272,6 +431,13 @@ link(user, chatId))` — если телефона нет среди польз�
 про единый `401` админского логина — не давать злоумышленнику различимый по
 ответу сигнал, которым можно было бы что-то прощупывать.
 
+> **Разбор кода:** открой `bot-service/internal/telegram/poller.go` — смотри
+> условие `m.Contact.UserID != m.From.ID` внутри `handle`. Открой
+> `backend-api/src/main/java/com/batowka/guestbooking/messaging/ContactSharedConsumer.java`
+> — смотри `handleContactShared` и `users.findByPhone(...).ifPresent(...)`.
+> Открой `contracts/telegram-inbound.md` — смотри раздел про `CONTACT_SHARED`
+> и условие `contact.user_id == from.id`.
+
 ## Постскриптум: баг, который нашёл живой смоук
 
 На живом смоуке bot-service стартовал раньше, чем backend впервые опубликовал
@@ -290,3 +456,14 @@ consumer упал с исключением «топика нет», баг на
 смоуку; и порядок запуска сервисов не должен быть протоколом — то, что
 работает, только если A стартует раньше B, рано или поздно сломается именно
 потому, что этого никто не гарантировал.
+
+> **Разбор кода:** открой `bot-service/internal/kafka/topics.go` — смотри
+> `EnsureTopic`: `Dial` до контроллера кластера и идемпотентный
+> `CreateTopics` (ошибка `TopicAlreadyExists` не считается провалом).
+> Открой
+> `backend-api/src/main/java/com/batowka/guestbooking/messaging/KafkaTopicsConfig.java`
+> — смотри бины `NewTopic` (`notificationsOutbound`, `telegramInbound`),
+> которые `KafkaAdmin` создаёт при поднятии контекста: это и есть
+> детерминированное создание обоих топиков при старте, о котором только что
+> шла речь, — backend объявляет их бинами, bot-service вызывает `EnsureTopic`
+> перед тем, как начать читать.

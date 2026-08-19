@@ -1,3 +1,138 @@
+---
+tutor:
+  stage: 2
+  title: "Spring Security, JWT, BCrypt, rate limiting"
+  topics:
+    - id: authn-vs-authz
+      section: "Аутентификация vs авторизация"
+      code_anchors:
+        - path: backend-api/src/main/java/com/batowka/guestbooking/auth/JwtAuthFilter.java
+          symbol: "JwtAuthFilter.doFilterInternal"
+          concept: "фильтр только устанавливает Authentication в SecurityContextHolder, никогда не решает, пускать ли запрос"
+        - path: backend-api/src/main/java/com/batowka/guestbooking/auth/SecurityConfig.java
+          symbol: "SecurityConfig.filterChain"
+          concept: "requestMatchers(...).hasRole(\"ADMIN\") / .authenticated() — решение «что кому можно» живёт отдельно от «кто ты»"
+      quiz_seeds:
+        - "Что делает JwtAuthFilter, если cookie нет или она битая — бросает ошибку или просто ничего не кладёт в контекст?"
+        - "Что придётся поменять в SecurityConfig, если завтра появится второй способ входа (например, через Telegram-код)?"
+      decisions:
+        - choice: "собственный JwtAuthFilter (OncePerRequestFilter) + библиотека jjwt для выпуска/парсинга токена"
+          alternatives: "spring-boot-starter-oauth2-resource-server — готовый JWT-декодер Spring Security"
+          why: "проект учебный: цель — разобраться, что происходит внутри фильтра и токена, а не подключить готовый механизм; формат токена свой и небольшой (нет внешнего issuer/JWKS), под него не нужна вся инфраструктура resource-server"
+          price: "то, что resource-server даёт бесплатно (валидация exp/iss/aud из коробки, ротация ключей через JWKS), приходится писать и тестировать руками — например, обработку токена без claim role пришлось чинить отдельным багфиксом"
+    - id: jwt-vs-sessions
+      section: "JWT против серверных сессий"
+      code_anchors:
+        - path: backend-api/src/main/java/com/batowka/guestbooking/auth/JwtService.java
+          symbol: "JwtService.issue"
+          concept: "claims (subject, role, issuedAt, expiration) + signWith(key, Jwts.SIG.HS256) — подпись, а не шифрование"
+        - path: backend-api/src/main/java/com/batowka/guestbooking/auth/AuthController.java
+          symbol: "AuthController.authCookie"
+          concept: "httpOnly(true) — токен недоступен для JavaScript в браузере, ограничение ущерба от XSS"
+        - path: backend-api/src/test/java/com/batowka/guestbooking/auth/JwtServiceTest.java
+          symbol: "tokenSignedWithDifferentSecretIsRejected"
+          concept: "токен с чужой подписью parse отклоняет"
+      quiz_seeds:
+        - "Почему JWT не нужно шифровать, а нужно подписывать — в чём разница между секретностью и целостностью тут?"
+        - "Какова цена stateless-подхода, если украденный токен нужно отозвать раньше срока?"
+      decisions:
+        - choice: "JWT хранится в httpOnly cookie"
+          alternatives: "JWT в localStorage, читаемый напрямую из JS на фронте"
+          why: "cookie с HttpOnly недоступна для JavaScript (document.cookie её не покажет) — даже успешная XSS-атака не может утащить токен; localStorage читается любым скриптом на странице"
+          price: "нельзя просто прочитать токен на фронте — например, чтобы показать его payload в devtools при отладке; фронт вынужден доверять серверу и ходить в /api/me, а не декодировать JWT сам"
+        - choice: "срок жизни токена 30 дней, без refresh-токенов"
+          alternatives: "короткоживущий access-токен + отдельный refresh-токен с возможностью отзыва"
+          why: "дизайн-документ (docs/specs/2026-08-19-stage-2-auth-design.md, §3): «YAGNI: revocation для дома друзей не нужна, компрометация лечится сменой секрета»; гостю неудобно логиниться заново каждую неделю ради календаря друзей"
+          price: "нет способа отозвать один конкретный украденный токен — единственный рычаг это сменить app.jwt.secret, что разлогинивает вообще всех"
+      pitfalls:
+        - "Ранняя версия JwtService.parse честно вызывала Role.valueOf(claims.get(\"role\", String.class)) без проверки на null — валидно подписанный токен без claim role ронял NPE вместо спокойного Optional.empty(). Исправлено коммитом d06a634 («fix: токен без claim role отклоняется, а не роняет NPE») явной проверкой roleClaim == null перед Role.valueOf. Мораль: parse() токена — это разбор недоверенных входных данных, и на каждое поле claims нужно закладываться, что его может не оказаться, даже если сам токен подписан правильно."
+    - id: filter-chain-request-path
+      section: "Путь запроса через цепочку фильтров"
+      code_anchors:
+        - path: backend-api/src/main/java/com/batowka/guestbooking/auth/SecurityConfig.java
+          symbol: "SecurityConfig.writeError / authenticationEntryPoint / accessDeniedHandler"
+          concept: "401 UNAUTHORIZED против 403 FORBIDDEN — разные хендлеры для «не вошёл» и «нет прав»"
+        - path: backend-api/src/main/java/com/batowka/guestbooking/auth/JwtAuthFilter.java
+          symbol: "JwtAuthFilter.COOKIE_NAME"
+          concept: "битая cookie не превращается в ошибку — JwtService.parse ловит исключение и возвращает Optional.empty()"
+        - path: backend-api/src/test/java/com/batowka/guestbooking/auth/SecurityFlowTest.java
+          symbol: "protectedRouteWithoutTokenGives401InApiFormat / friendOnAdminRouteGives403InApiFormat / garbageTokenIsJustAnonymous"
+          concept: "три сценария маршрута через фильтры целиком, от запроса до тела ответа"
+      quiz_seeds:
+        - "Почему CSRF-защита выключена (.csrf(...disable)) и это не забытая галочка?"
+        - "Чем ответ на битую cookie отличается от ответа на полное отсутствие cookie — и почему они одинаковые?"
+      decisions:
+        - choice: "CSRF-защита выключена (.csrf(AbstractHttpConfigurer::disable))"
+          alternatives: "включённый Spring CSRF-токен (стандартный synchronizer token pattern)"
+          why: "дизайн-документ (docs/specs/2026-08-19-stage-2-auth-design.md, §3): «stateless + SameSite=Lax покрывают наш случай» — приложение не хранит server-side сессию, а cookie с SameSite=Lax браузер не отправляет при запросах, инициированных с чужого сайта"
+          price: "решение завязано именно на SameSite=Lax и httpOnly; если в будущем понадобится сменить SameSite на None (например, кросс-доменный фронт), защиту придётся пересматривать заново, а не считать закрытой раз и навсегда"
+    - id: bcrypt-salt-cost
+      section: "BCrypt: соль, медленность и первый админ"
+      code_anchors:
+        - path: backend-api/src/main/java/com/batowka/guestbooking/auth/AdminSeeder.java
+          symbol: "AdminSeeder.seed"
+          concept: "идемпотентный upsert админа при каждом старте приложения"
+        - path: backend-api/src/main/java/com/batowka/guestbooking/auth/SecurityConfig.java
+          symbol: "SecurityConfig.passwordEncoder"
+          concept: "BCryptPasswordEncoder — соль внутри хеша, matches() вместо hash ==="
+        - path: backend-api/src/test/java/com/batowka/guestbooking/auth/AdminSeederTest.java
+          symbol: "seedingTwiceKeepsSingleAdmin"
+          concept: "два подряд вызова seed() не плодят второго админа"
+      quiz_seeds:
+        - "Почему нельзя сравнивать введённый пароль с хешем просто как hash(введённый) == сохранённый_hash?"
+        - "Зачем BCrypt специально медленный, в отличие от SHA-256?"
+      decisions:
+        - choice: "первый админ создаётся идемпотентным AdminSeeder (ApplicationRunner) из app.admin.phone/password при каждом старте приложения"
+          alternatives: "создать админа отдельной SQL-миграцией (INSERT в V-файле Flyway)"
+          why: "дизайн-документ (docs/specs/2026-08-19-stage-2-auth-design.md, §2): конфигурация (dev — application.yml, прод — .env) плюс апсерт при старте — не нужен отдельный SQL-скрипт с паролем/хешем внутри версионированной миграции, обновление пароля/роли админа не требует новой миграции"
+          price: "AdminSeeder выполняется на каждом старте приложения (лишний upsert-запрос), а dev-пароль по умолчанию временно лежит открытым текстом в application.yml с комментарием — риск забыть заменить его перед проде (закрыт явным TODO на этап 8)"
+      pitfalls:
+        - "AuthController.adminLogin строит цепочку .filter(...).filter(u -> ... && encoder.matches(...)) — если телефон не найден или роль не ADMIN, encoder.matches() вообще не вызывается, цепочка обрывается раньше. BCrypt специально медленный (см. выше), поэтому путь «неизвестный телефон» и путь «неверный пароль» отличаются по времени ответа, хотя оба возвращают один и тот же 401 INVALID_CREDENTIALS. Это тайминг-канал (timing side-channel): по задержке ответа можно статистически отличить «такого админа нет» от «админ есть, пароль неверный», в обход самой идеи единого 401. Как думаешь, что нужно сделать, чтобы убрать эту разницу во времени ответа?"
+    - id: rate-limiting-sliding-window
+      section: "Rate limiting: скользящее окно и инжектируемое время"
+      code_anchors:
+        - path: backend-api/src/main/java/com/batowka/guestbooking/auth/LoginRateLimiter.java
+          symbol: "LoginRateLimiter.check"
+          concept: "Deque<Instant> на IP + отбрасывание записей старше WINDOW от текущего now — скользящее, не фиксированное окно"
+        - path: backend-api/src/test/java/com/batowka/guestbooking/auth/LoginRateLimiterTest.java
+          symbol: "windowSlidesAfterAMinute"
+          concept: "TestClock.advance(...) двигает время без реального Thread.sleep"
+      quiz_seeds:
+        - "В чём именно ломается наивный фиксированный счётчик на стыке минутных окон, а скользящее окно — нет?"
+        - "Почему Clock — параметр конструктора, а не Clock.systemUTC() напрямую внутри LoginRateLimiter?"
+      decisions:
+        - choice: "собственная in-memory реализация скользящего окна (~20 строк, ConcurrentHashMap<String, Deque<Instant>> по IP)"
+          alternatives: "готовая библиотека bucket4j"
+          why: "дизайн-документ (docs/specs/2026-08-19-stage-2-auth-design.md, §4): «у bucket4j нестабильные Maven-координаты между версиями, а свой limiter проще и нагляднее для обучения»"
+          price: "in-memory решение живёт только на один процесс backend-api — если сервис когда-нибудь запустится в нескольких экземплярах, у каждого будет свой независимый счётчик и общий лимит фактически умножится на число процессов; своя реализация к тому же не проверена годами продакшена, как готовая библиотека"
+      pitfalls:
+        - "@Valid отсекает некорректные тела запроса (пустой JSON, битый формат) ещё до входа в метод контроллера — то есть до вызова rateLimiter.check(...). Такие мусорные запросы лимитером вообще не считаются: можно спамить эндпоинт битыми телами без ограничения по IP. Осознанно припаркованный (PARKED) пункт ревью задачи 7: цена ошибки нулевая (мусором и так можно спамить любой эндпоинт — это не специфика логина), честный фикс — перенос проверки лимита в фильтр, до валидации тела — отложен на этап 8."
+    - id: error-disclosure-safety
+      section: "Безопасность ошибок: что можно раскрывать, а что нет"
+      code_anchors:
+        - path: backend-api/src/main/java/com/batowka/guestbooking/auth/AuthController.java
+          symbol: "AuthController.adminLogin / AuthController.login"
+          concept: "единый 401 INVALID_CREDENTIALS у admin-логина против осознанного UNKNOWN_PHONE у гостевого"
+        - path: backend-api/src/main/java/com/batowka/guestbooking/common/GlobalExceptionHandler.java
+          symbol: "GlobalExceptionHandler.unexpected"
+          concept: "catch-all на Exception.class — полный stack trace в лог, клиенту только стабильный код 500 INTERNAL_ERROR"
+        - path: backend-api/src/test/java/com/batowka/guestbooking/auth/AdminLoginTest.java
+          symbol: "wrongPasswordGives401 / unknownPhoneGivesSame401"
+          concept: "оба провала неотличимы снаружи по коду ответа"
+      quiz_seeds:
+        - "Почему admin-логин прячет разницу между «нет такого телефона» и «неверный пароль», а гостевой логин — нет?"
+        - "Что могло бы утечь наружу, если бы GlobalExceptionHandler отдавал клиенту текст пойманного исключения?"
+      decisions:
+        - choice: "admin-логин: единый 401 INVALID_CREDENTIALS на любой провал; гостевой login: отдельный 401 UNKNOWN_PHONE"
+          alternatives: "единая политика для обоих логинов — либо оба скрывают причину провала, либо оба её раскрывают"
+          why: "дизайн-документ (docs/specs/2026-08-19-stage-2-auth-design.md, §5): у admin-логина различимый ответ дал бы атакующему инструмент сначала найти рабочий номер, а потом подбирать пароль (пароль — секрет); у гостевого логина пароля нет вообще, «этот номер есть в списке» — не инструмент компрометации, а просто членство, которое по спеке осознанно можно раскрывать"
+          price: "два разных подхода к, казалось бы, одной и той же ситуации «логин не удался» усложняют модель для того, кто читает код впервые — приходится каждый раз вспоминать, почему тут иначе, а не просто скопировать паттерн с одного контроллера на другой"
+  bugs_and_lessons:
+    - "Инжектируемый Clock в LoginRateLimiter вместо Clock.systemUTC() внутри класса — не абстракция ради абстракции: именно это делает тест сдвига скользящего окна (windowSlidesAfterAMinute) быстрым и детерминированным, без реального ожидания 61 секунды в тесте."
+    - "@Valid отсекает некорректные тела запроса ещё до вызова rateLimiter.check(...), поэтому мусорные запросы лимитером не считаются — осознанно припаркованный (PARKED) пробел из ревью задачи 7: цена ошибки нулевая (мусором и так можно спамить любой эндпоинт), честный фикс — перенос проверки лимита в фильтр — отложен на этап 8."
+  prerequisites: [migrations-ddl-auto]
+---
+
 # Этап 2: Spring Security, JWT, BCrypt, rate limiting
 
 Разбор того, что мы собрали в этапе 2 — пакет
@@ -27,6 +162,13 @@
 аутентификации (скажем, вход по коду из Telegram-бота на этапе 3+), достаточно
 добавить ещё один фильтр, который так же кладёт `Authentication` в контекст, а вся
 логика «что кому можно» в `SecurityConfig` не поменяется ни на строчку.
+
+> **Разбор кода:** открой
+> `backend-api/src/main/java/com/batowka/guestbooking/auth/JwtAuthFilter.java` —
+> смотри `doFilterInternal`: обрати внимание, что в конце всегда вызывается
+> `chain.doFilter`, независимо от того, нашёлся токен или нет. Открой
+> `backend-api/src/main/java/com/batowka/guestbooking/auth/SecurityConfig.java` —
+> смотри `filterChain` и цепочку `.requestMatchers(...)`.
 
 ## 2. JWT против серверных сессий
 
@@ -73,6 +215,14 @@ Cookie с флагом `HttpOnly` для JavaScript в браузере попр
 защита от самой XSS-уязвимости (её всё равно надо чинить), а ограничение ущерба, если
 она вдруг где-то возникнет.
 
+> **Разбор кода:** открой
+> `backend-api/src/main/java/com/batowka/guestbooking/auth/JwtService.java` —
+> смотри `issue`: какие claims кладутся и чем подписывается токен. Открой
+> `backend-api/src/main/java/com/batowka/guestbooking/auth/AuthController.java`
+> — смотри `authCookie` и флаг `.httpOnly(true)`. Открой
+> `backend-api/src/test/java/com/batowka/guestbooking/auth/JwtServiceTest.java`
+> — смотри `tokenSignedWithDifferentSecretIsRejected`.
+
 ## 3. Путь запроса через цепочку фильтров
 
 Разберём, что происходит с запросом `GET /api/me` без cookie. Spring Security строит
@@ -110,6 +260,16 @@ server-side состояние, которое можно было бы неза
 одним запросом. Именно эту комбинацию — stateless + `SameSite=Lax` — и называет
 дизайн-документ (§3) как причину не тащить в проект отдельный CSRF-токен.
 
+> **Разбор кода:** открой
+> `backend-api/src/main/java/com/batowka/guestbooking/auth/SecurityConfig.java`
+> — смотри `writeError`, `authenticationEntryPoint` и `accessDeniedHandler` рядом:
+> сравни коды 401 и 403. Открой
+> `backend-api/src/main/java/com/batowka/guestbooking/auth/JwtAuthFilter.java` —
+> смотри `COOKIE_NAME` и как достаётся cookie. Открой
+> `backend-api/src/test/java/com/batowka/guestbooking/auth/SecurityFlowTest.java`
+> — смотри три теста подряд: `protectedRouteWithoutTokenGives401InApiFormat`,
+> `friendOnAdminRouteGives403InApiFormat`, `garbageTokenIsJustAnonymous`.
+
 ## 4. BCrypt: соль, медленность и первый админ
 
 `SecurityConfig.passwordEncoder` возвращает `BCryptPasswordEncoder` — им
@@ -144,6 +304,14 @@ GPU), а на порядки медленнее — атака стоимост�
 `app.admin.password` в `application.yml` сейчас — dev-заглушки с явным комментарием
 («прод — `.env`, этап 8»); секреты для реального деплоя в git не попадают, они придут
 через переменные окружения на этапе 8, когда появится VPS.
+
+> **Разбор кода:** открой
+> `backend-api/src/main/java/com/batowka/guestbooking/auth/AdminSeeder.java` —
+> смотри `seed()` и комментарий «Идемпотентный upsert админа». Открой
+> `backend-api/src/main/java/com/batowka/guestbooking/auth/SecurityConfig.java`
+> — смотри `passwordEncoder`. Открой
+> `backend-api/src/test/java/com/batowka/guestbooking/auth/AdminSeederTest.java`
+> — смотри `seedingTwiceKeepsSingleAdmin`.
 
 ## 5. Rate limiting: скользящее окно и инжектируемое время
 
@@ -191,6 +359,13 @@ backend-api когда-нибудь запустится в нескольких
 специфика логина), а честный фикс — перенос проверки лимита в фильтр, до валидации
 тела — отложен на этап 8 (прод-hardening).
 
+> **Разбор кода:** открой
+> `backend-api/src/main/java/com/batowka/guestbooking/auth/LoginRateLimiter.java`
+> — смотри `check`: обрати внимание на цикл, который выбрасывает устаревшие
+> записи из `Deque<Instant>` перед проверкой лимита. Открой
+> `backend-api/src/test/java/com/batowka/guestbooking/auth/LoginRateLimiterTest.java`
+> — смотри `windowSlidesAfterAMinute` и `TestClock.advance`.
+
 ## 6. Безопасность ошибок: что можно раскрывать, а что нет
 
 В коде видны два разных подхода к одной на первый взгляд похожей ситуации — «логин не
@@ -230,3 +405,11 @@ ADMIN — беспарольный обход не должен уметь вы�
 на файловой системе), и без catch-all такая информация утекла бы наружу при любой
 непредвиденной ошибке; с ним — наружу уходит только стабильный код и общая фраза, а
 детали остаются в логах, доступных только тем, кто может зайти на сервер.
+
+> **Разбор кода:** открой
+> `backend-api/src/main/java/com/batowka/guestbooking/auth/AuthController.java`
+> — смотри `adminLogin` и `login` рядом, сравни их обработку провала. Открой
+> `backend-api/src/main/java/com/batowka/guestbooking/common/GlobalExceptionHandler.java`
+> — смотри `unexpected` и `@ExceptionHandler(Exception.class)`. Открой
+> `backend-api/src/test/java/com/batowka/guestbooking/auth/AdminLoginTest.java` —
+> смотри `wrongPasswordGives401` и `unknownPhoneGivesSame401` рядом.
