@@ -36,7 +36,8 @@ class MeControllerTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.phone").value("+81600000001"))
                 .andExpect(jsonPath("$.name").value("Маша"))
-                .andExpect(jsonPath("$.role").value("FRIEND"));
+                .andExpect(jsonPath("$.role").value("FRIEND"))
+                .andExpect(jsonPath("$.telegramLinked").value(false));
     }
 
     @Test

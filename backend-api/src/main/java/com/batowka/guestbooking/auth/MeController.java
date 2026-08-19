@@ -14,12 +14,13 @@ public class MeController {
 
     private final UserAccountRepository users;
 
-    public record MeResponse(String phone, String name, Role role) {
+    public record MeResponse(String phone, String name, Role role, boolean telegramLinked) {
     }
 
     @GetMapping("/api/me")
     public MeResponse me(Authentication auth) {
         UserAccount user = users.findById((Long) auth.getPrincipal()).orElseThrow();
-        return new MeResponse(user.getPhone(), user.getName(), user.getRole());
+        return new MeResponse(user.getPhone(), user.getName(), user.getRole(),
+                user.getTelegramChatId() != null);
     }
 }

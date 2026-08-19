@@ -1,5 +1,8 @@
-# Contracts
+# Контракты событий Kafka
 
-JSON-схемы Kafka-событий (`notifications.outbound`, `telegram.inbound`).
-Появятся в плане №2 вместе с самими событиями. Схемы — единственный
-источник правды о формате сообщений для backend-api (Java) и bot-service (Go).
+Язык-нейтральное описание сообщений между backend-api (Java) и bot-service
+(Go). Код обоих сервисов пишется против этих файлов.
+
+- [envelope.md](envelope.md) — конверт всех событий и правила эволюции
+- [notifications-outbound.md](notifications-outbound.md) — backend → bot
+- [telegram-inbound.md](telegram-inbound.md) — bot → backend

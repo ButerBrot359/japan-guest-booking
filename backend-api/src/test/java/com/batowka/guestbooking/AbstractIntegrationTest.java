@@ -17,8 +17,23 @@ public abstract class AbstractIntegrationTest {
     static final PostgreSQLContainer POSTGRES =
             new PostgreSQLContainer("postgres:16-alpine");
 
+    // Тег 3.9.1, не 3.9.0 из брифа: apache/kafka:3.9.0 несёт баг KAFKA-18281
+    // (контроллер в KRaft некорректно валидирует 0.0.0.0 у неанонсируемого
+    // CONTROLLER-листенера, что testcontainers всегда настраивает так же —
+    // контейнер падает на "Transitioning from RECOVERY to RUNNING" при старте).
+    // Баг исправлен в 3.9.1/4.0.0; образ остаётся Apache Kafka в KRaft-режиме.
+    @ServiceConnection
+    static final org.testcontainers.kafka.KafkaContainer KAFKA =
+            new org.testcontainers.kafka.KafkaContainer("apache/kafka:3.9.1");
+
     static {
         POSTGRES.start();
+        KAFKA.start();
+    }
+
+    /** Адрес брокера тест-контейнера — для тестовых консьюмеров. */
+    protected static String kafkaBootstrapServers() {
+        return KAFKA.getBootstrapServers();
     }
 
     @Autowired
