@@ -44,4 +44,17 @@ class JwtServiceTest {
 
         assertThat(jwt.parse("не-jwt-вообще")).isEmpty();
     }
+
+    @Test
+    void validlySignedTokenWithoutRoleClaimIsRejected() {
+        JwtService jwt = new JwtService(SECRET, 30);
+        String tokenWithoutRole = io.jsonwebtoken.Jwts.builder()
+                .subject("42")
+                .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
+                        SECRET.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                        io.jsonwebtoken.Jwts.SIG.HS256)
+                .compact();
+
+        assertThat(jwt.parse(tokenWithoutRole)).isEmpty();
+    }
 }

@@ -43,9 +43,13 @@ public class JwtService {
         try {
             Claims claims = Jwts.parser().verifyWith(key).build()
                     .parseSignedClaims(token).getPayload();
+            String roleClaim = claims.get("role", String.class);
+            if (roleClaim == null) {
+                return Optional.empty();
+            }
             return Optional.of(new TokenData(
                     Long.valueOf(claims.getSubject()),
-                    Role.valueOf(claims.get("role", String.class))));
+                    Role.valueOf(roleClaim)));
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
         }
