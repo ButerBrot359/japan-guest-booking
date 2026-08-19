@@ -1,6 +1,7 @@
 package com.batowka.guestbooking;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -23,6 +24,12 @@ public abstract class AbstractIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private ObjectProvider<com.batowka.guestbooking.auth.AdminSeeder> adminSeeder;
+
+    @Autowired
+    private ObjectProvider<com.batowka.guestbooking.auth.LoginRateLimiter> rateLimiter;
+
     @BeforeEach
     void cleanDatabase() {
         jdbcTemplate.execute("""
@@ -30,5 +37,7 @@ public abstract class AbstractIntegrationTest {
                     access_requests, outbox, processed_events, users
                     RESTART IDENTITY CASCADE
                 """);
+        adminSeeder.ifAvailable(com.batowka.guestbooking.auth.AdminSeeder::seed);
+        rateLimiter.ifAvailable(com.batowka.guestbooking.auth.LoginRateLimiter::reset);
     }
 }
