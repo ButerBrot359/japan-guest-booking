@@ -13,3 +13,7 @@ app:
     # dev-заглушка; боевой секрет придёт из .env на этапе 8 (в git не попадает)
     secret: dev-secret-change-me-0123456789abcdef
     ttl-days: 30
+  admin:
+    # dev-заглушки; боевые значения придут из .env на этапе 8
+    phone: "+818000000000"
+    password: admin-dev-password
