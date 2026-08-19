@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -44,14 +45,16 @@ type API interface {
 }
 
 type Client struct {
-	base string
-	http *http.Client
+	base  string
+	token string
+	http  *http.Client
 }
 
 // NewClient: baseURL в проде — "https://api.telegram.org", в тестах — httptest.
 func NewClient(token, baseURL string) *Client {
 	return &Client{
-		base: baseURL + "/bot" + token,
+		base:  baseURL + "/bot" + token,
+		token: token,
 		// long poll 30с + запас; таймаут больше poll-таймаута обязателен
 		http: &http.Client{Timeout: 65 * time.Second},
 	}
@@ -106,18 +109,32 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, req
 func (c *Client) do(req *http.Request, result any) error {
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		// *url.Error от http.Client.Do содержит полный URL (с токеном) —
+		// санитизируем перед тем, как ошибка попадёт в логи поллера/консьюмера.
+		return c.sanitize(err)
 	}
 	defer resp.Body.Close()
 	var api apiResponse
 	if err := json.NewDecoder(resp.Body).Decode(&api); err != nil {
-		return fmt.Errorf("telegram: битый ответ: %w", err)
+		return c.sanitize(fmt.Errorf("telegram: битый ответ: %w", err))
 	}
 	if !api.OK {
 		return fmt.Errorf("telegram: %s", api.Description)
 	}
 	if result != nil {
-		return json.Unmarshal(api.Result, result)
+		if err := json.Unmarshal(api.Result, result); err != nil {
+			return c.sanitize(err)
+		}
 	}
 	return nil
+}
+
+// sanitize вычищает токен бота из текста ошибки. Токен в URL-ошибках сети
+// присутствует напрямую; ошибки декодирования JSON его не содержат, но
+// пропускаются через ту же функцию для единообразия.
+func (c *Client) sanitize(err error) error {
+	if err == nil || c.token == "" {
+		return err
+	}
+	return fmt.Errorf("%s", strings.ReplaceAll(err.Error(), c.token, "***"))
 }

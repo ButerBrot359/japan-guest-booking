@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"time"
 
 	kafkago "github.com/segmentio/kafka-go"
 
@@ -89,7 +90,12 @@ func (c *Consumer) Run(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			log.Printf("kafka fetch: %v", err)
+			log.Printf("kafka fetch: %v — повтор через 3с", err)
+			select {
+			case <-time.After(3 * time.Second):
+			case <-ctx.Done():
+				return
+			}
 			continue
 		}
 		c.core.handle(ctx, msg.Value)

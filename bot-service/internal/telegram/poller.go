@@ -37,17 +37,34 @@ func (p *Poller) Run(ctx context.Context) {
 			}
 			continue
 		}
+		failed := false
 		for _, u := range updates {
-			p.handle(ctx, u)
+			if err := p.handle(ctx, u); err != nil {
+				// не двигаем offset — Telegram передоставит этот update;
+				// дубль на backend безопасен (идемпотентность).
+				failed = true
+				break
+			}
 			p.offset = u.UpdateID + 1
+		}
+		if failed {
+			select {
+			case <-time.After(3 * time.Second):
+			case <-ctx.Done():
+				return
+			}
 		}
 	}
 }
 
-func (p *Poller) handle(ctx context.Context, u Update) {
+// handle возвращает ошибку только для фатальной ветки (публикация CONTACT_SHARED
+// в Kafka) — её Run обязан ретраить без сдвига offset. Ошибки sendMessage
+// (приветствие /start, ack-подтверждение) не фатальны: логируются и гасятся,
+// чтобы косметическая неудача не зациклила онбординг повторной доставкой.
+func (p *Poller) handle(ctx context.Context, u Update) error {
 	m := u.Message
 	if m == nil {
-		return
+		return nil
 	}
 	switch {
 	case m.Text == "/start":
@@ -59,7 +76,7 @@ func (p *Poller) handle(ctx context.Context, u Update) {
 	case m.Contact != nil:
 		if m.From == nil || m.Contact.UserID != m.From.ID {
 			log.Printf("контакт не принадлежит отправителю — игнорирую")
-			return
+			return nil
 		}
 		username := ""
 		if m.From != nil {
@@ -68,7 +85,7 @@ func (p *Poller) handle(ctx context.Context, u Update) {
 		if err := p.publisher.PublishContactShared(ctx, m.Chat.ID,
 			m.Contact.PhoneNumber, username); err != nil {
 			log.Printf("publish CONTACT_SHARED: %v", err)
-			return
+			return err
 		}
 		if err := p.api.SendMessage(ctx, m.Chat.ID,
 			"Принял! Если твой номер в списке гостей — сейчас придёт подтверждение.",
@@ -76,4 +93,5 @@ func (p *Poller) handle(ctx context.Context, u Update) {
 			log.Printf("sendMessage ack: %v", err)
 		}
 	}
+	return nil
 }

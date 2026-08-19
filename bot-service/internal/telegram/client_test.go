@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -66,5 +67,21 @@ func TestApiErrorIsReturned(t *testing.T) {
 	client := NewClient("TEST", server.URL)
 	if _, err := client.GetUpdates(context.Background(), 0); err == nil {
 		t.Fatal("ожидал ошибку при ok=false")
+	}
+}
+
+func TestNetworkErrorDoesNotLeakToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	server.Close() // сервер закрыт — запрос гарантированно упадёт по сети,
+	// а *url.Error от http.Client.Do содержит полный URL с токеном
+
+	const secretToken = "SECRET-BOT-TOKEN"
+	client := NewClient(secretToken, server.URL)
+	_, err := client.GetUpdates(context.Background(), 0)
+	if err == nil {
+		t.Fatal("ожидал сетевую ошибку при обращении к закрытому серверу")
+	}
+	if strings.Contains(err.Error(), secretToken) {
+		t.Fatalf("ошибка содержит токен бота: %v", err)
 	}
 }
