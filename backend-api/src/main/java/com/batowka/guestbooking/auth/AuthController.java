@@ -3,6 +3,7 @@ package com.batowka.guestbooking.auth;
 import com.batowka.guestbooking.user.Role;
 import com.batowka.guestbooking.user.UserAccount;
 import com.batowka.guestbooking.user.UserAccountRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ public class AuthController {
     private final UserAccountRepository users;
     private final JwtService jwt;
     private final PasswordEncoder encoder;
+    private final LoginRateLimiter rateLimiter;
 
     public record LoginRequest(@NotBlank String phone) {
     }
@@ -35,7 +37,8 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Void> login(@Valid @RequestBody LoginRequest body) {
+    public ResponseEntity<Void> login(@Valid @RequestBody LoginRequest body, HttpServletRequest request) {
+        rateLimiter.check(request.getRemoteAddr());
         String phone = Phones.normalize(body.phone()).orElseThrow(InvalidPhoneException::new);
         // Роль ADMIN сюда не пускаем: беспарольный логин не должен выдавать админский токен
         UserAccount user = users.findByPhone(phone)
@@ -45,7 +48,8 @@ public class AuthController {
     }
 
     @PostMapping("/admin-login")
-    public ResponseEntity<Void> adminLogin(@Valid @RequestBody AdminLoginRequest body) {
+    public ResponseEntity<Void> adminLogin(@Valid @RequestBody AdminLoginRequest body, HttpServletRequest request) {
+        rateLimiter.check(request.getRemoteAddr());
         // Единый 401 на любой провал: не раскрываем, что именно не совпало
         UserAccount admin = Phones.normalize(body.phone())
                 .flatMap(users::findByPhone)

@@ -2,6 +2,7 @@ package com.batowka.guestbooking.common;
 
 import com.batowka.guestbooking.auth.InvalidCredentialsException;
 import com.batowka.guestbooking.auth.InvalidPhoneException;
+import com.batowka.guestbooking.auth.RateLimitExceededException;
 import com.batowka.guestbooking.auth.UnknownPhoneException;
 import com.batowka.guestbooking.calendar.InvalidCalendarRangeException;
 import org.springframework.http.HttpStatus;
@@ -64,5 +65,11 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiError unreadableBody(HttpMessageNotReadableException ex) {
         return new ApiError("VALIDATION_ERROR", "Тело запроса не читается");
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
+    public ApiError rateLimited(RateLimitExceededException ex) {
+        return new ApiError("RATE_LIMITED", ex.getMessage());
     }
 }

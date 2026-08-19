@@ -57,4 +57,9 @@ public class SecurityConfig {
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
+
+    @Bean
+    java.time.Clock clock() {
+        return java.time.Clock.systemUTC();
+    }
 }

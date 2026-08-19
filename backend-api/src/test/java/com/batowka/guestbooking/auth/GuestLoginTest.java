@@ -96,4 +96,20 @@ class GuestLoginTest extends AbstractIntegrationTest {
         assertThat(result.getResponse().getHeader("Set-Cookie"))
                 .contains("auth=;", "Max-Age=0");
     }
+
+    @Test
+    void sixthLoginAttemptInARowGets429() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            mvc.perform(post("/api/auth/login")
+                            .contentType(APPLICATION_JSON)
+                            .content("{\"phone\": \"+81599999999\"}"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        mvc.perform(post("/api/auth/login")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"phone\": \"+81599999999\"}"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("RATE_LIMITED"));
+    }
 }
