@@ -1,3 +1,67 @@
+---
+tutor:
+  stage: 0
+  title: "Монорепо, dev-окружение, CI"
+  topics:
+    - id: monorepo-structure
+      section: "Что такое монорепо и почему мы выбрали его"
+      code_anchors:
+        - path: README.md
+          symbol: "Структура репозитория"
+          concept: "backend-api/bot-service/frontend/contracts живут в одном репозитории"
+        - path: contracts/README.md
+          symbol: "Контракты событий Kafka"
+          concept: "общий источник правды о формате сообщений для backend-api и bot-service"
+        - path: .github/workflows/ci.yml
+          symbol: "jobs.backend.defaults.run.working-directory"
+          concept: "job ограничен директорией сервиса, чтобы монорепо не раздувало сборку"
+      quiz_seeds:
+        - "Почему общий contracts/ снижает риск того, что backend обновили, а bot-service тихо сломался?"
+        - "Какой минус монорепо назван в тексте и чем он закрыт в ci.yml уже на этапе 0?"
+    - id: docker-compose-postgres
+      section: "Как читать docker-compose.dev.yml"
+      code_anchors:
+        - path: docker-compose.dev.yml
+          symbol: "services.postgres"
+          concept: "проброс порта 5432:5432 и named volume pgdata, переживающий пересоздание контейнера"
+        - path: backend-api/src/main/resources/application.yml
+          symbol: "spring.datasource"
+          concept: "те же dev/dev и localhost:5432, что и переменные окружения postgres в compose"
+      quiz_seeds:
+        - "Что случится с данными в базе, если убрать volume pgdata из docker-compose.dev.yml?"
+        - "Почему psql с ноутбука подключается на localhost:5432, а не на внутренний адрес контейнера?"
+    - id: kafka-kraft-listeners
+      section: "Kafka в KRaft-режиме: зачем три listener'а"
+      code_anchors:
+        - path: docker-compose.dev.yml
+          symbol: "services.kafka.environment.KAFKA_LISTENERS"
+          concept: "три listener'а — EXTERNAL/INTERNAL/CONTROLLER — и почему ADVERTISED_LISTENERS для них разный"
+        - path: docker-compose.dev.yml
+          symbol: "services.kafka.environment.KAFKA_CONTROLLER_QUORUM_VOTERS"
+          concept: "состав Raft-кворума контроллера при единственном брокере"
+      quiz_seeds:
+        - "Почему INTERNAL рекламирует kafka:19092, а EXTERNAL — localhost:9092, хотя это один и тот же брокер?"
+        - "Зачем нужен отдельный CONTROLLER listener, если клиентам он вообще не нужен?"
+    - id: ci-anatomy
+      section: "Анатомия GitHub Actions"
+      code_anchors:
+        - path: .github/workflows/ci.yml
+          symbol: "jobs.backend"
+          concept: "checkout → setup-java → ./mvnw test, с кэшем Maven-зависимостей"
+        - path: .github/workflows/ci.yml
+          symbol: "jobs.bot"
+          concept: "второй job для bot-service — то самое разрастание CI по мере роста монорепо, о котором говорит проза"
+        - path: backend-api/src/test/java/com/batowka/guestbooking/AbstractIntegrationTest.java
+          symbol: "POSTGRES"
+          concept: "Testcontainers сам поднимает Postgres через Docker daemon раннера, без доп. настройки CI"
+      quiz_seeds:
+        - "Зачем нужен шаг actions/checkout@v4, если раннер и так виртуальная машина?"
+        - "Как интеграционные тесты получают доступ к Docker на GitHub-раннере без специальной настройки CI?"
+  bugs_and_lessons:
+    - "Минус монорепо — раздувание репозитория и риск, что CI-job попытается собрать код, которого ещё нет (например, ещё не написанный bot-service), — закрыт заранее через defaults.run.working-directory: backend-api в ci.yml, а не обнаружен постфактум на живом провале сборки."
+  prerequisites: []
+---
+
 # Этап 0: монорепо, dev-окружение, CI
 
 Разбор того, что мы собрали в этапе 0 — каркас репозитория, `docker-compose.dev.yml`
@@ -29,6 +93,14 @@ CI-конфига и синхронизировать между ними вер
 `ci.yml`, чтобы job не пытался собрать несуществующий пока Go-код). Для проекта такого
 масштаба (три маленьких сервиса одной команды) плюсы явно перевешивают.
 
+> **Разбор кода:** открой `README.md` — смотри раздел «Структура репозитория»:
+> обрати внимание, что `backend-api/`, `bot-service/`, `frontend/` и `contracts/`
+> перечислены как соседние папки одного репозитория, а не отдельные проекты.
+> Открой `contracts/README.md` — смотри, как один и тот же набор JSON-схем
+> описан как источник правды сразу для двух языков (Java и Go). Открой
+> `.github/workflows/ci.yml` — смотри `jobs.backend.defaults.run.working-directory`:
+> это и есть закрытие минуса монорепо, о котором ниже.
+
 ## 2. Как читать `docker-compose.dev.yml`
 
 Файл `docker-compose.dev.yml` поднимает два сервиса для локальной разработки —
@@ -51,6 +123,12 @@ Postgres примонтирует тот же volume и увидит те же �
 таблицами. Если бы мы не задали volume, а просто оставили путь без монтирования,
 каждый пересоздание контейнера стирало бы всю базу — при разработке это очень
 раздражает: заново гонять миграции и заново руками создавать тестовые брони.
+
+> **Разбор кода:** открой `docker-compose.dev.yml` — смотри секцию
+> `services.postgres`: сопоставь `ports`, `environment` и `volumes` с тем, что
+> только что обсудили. Открой `backend-api/src/main/resources/application.yml`
+> — смотри `spring.datasource`: значения `url`/`username`/`password` буквально
+> те же `dev`/`dev`/`localhost:5432`, что и в compose.
 
 ## 3. Kafka в KRaft-режиме: зачем три listener'а
 
@@ -78,6 +156,12 @@ Docker DNS в правильный IP — поэтому `INTERNAL` реклам
 метаданные кластера; у нас брокер один (`KAFKA_NODE_ID: 1`), поэтому кворум состоит из
 одного голоса — это нормально для dev-окружения, но в проде для отказоустойчивости
 делают нечётное число узлов (3, 5).
+
+> **Разбор кода:** открой `docker-compose.dev.yml` — смотри
+> `services.kafka.environment.KAFKA_LISTENERS` и `KAFKA_ADVERTISED_LISTENERS`
+> рядом друг с другом: обрати внимание, что у первого три значения, а у
+> второго — только два (CONTROLLER не рекламируется вообще). Смотри также
+> `KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093` — один голос при одном узле.
 
 ## 4. Анатомия GitHub Actions
 
@@ -107,3 +191,11 @@ Testcontainers (см. `backend-api/src/test/java/com/batowka/guestbooking/Abstra
 обращается к Docker daemon через сокет (`/var/run/docker.sock`), как это делает любой
 `docker run` с вашего ноутбука — раннеру не нужно ничего специально «включать» для
 интеграционных тестов, только чтобы Docker в принципе был на машине.
+
+> **Разбор кода:** открой `.github/workflows/ci.yml` — смотри `jobs.backend`
+> целиком (шаги `checkout` → `setup-java` → `./mvnw test`) и рядом `jobs.bot`
+> — второй job появился позже, уже когда bot-service существовал, ровно то
+> разрастание CI, о котором говорилось в §1. Открой
+> `backend-api/src/test/java/com/batowka/guestbooking/AbstractIntegrationTest.java`
+> — смотри статическое поле `POSTGRES`: это и есть Testcontainers, которому
+> ничего не нужно объяснять про раннер.

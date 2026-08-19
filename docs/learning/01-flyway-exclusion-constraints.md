@@ -1,3 +1,77 @@
+---
+tutor:
+  stage: 1
+  title: "Flyway и exclusion constraints"
+  topics:
+    - id: migrations-ddl-auto
+      section: "Зачем миграции и почему ddl-auto: validate, а не update"
+      code_anchors:
+        - path: backend-api/src/main/resources/application.yml
+          symbol: "spring.jpa.hibernate.ddl-auto"
+          concept: "validate вместо update — Hibernate только сверяет схему, не меняет её"
+        - path: backend-api/src/main/resources/db/migration/V1__init.sql
+          symbol: "CREATE TABLE users / bookings / blocked_periods / access_requests / otp_challenges / outbox / processed_events"
+          concept: "вся схема этапа 1 одним версионированным SQL-файлом"
+      quiz_seeds:
+        - "Почему ddl-auto: update соблазнителен на старте, но опасен на проде?"
+        - "Как Flyway узнаёт, какие миграции уже применены к конкретной базе?"
+    - id: exclusion-constraint-overlap
+      section: "Как работает exclusion constraint"
+      code_anchors:
+        - path: backend-api/src/main/resources/db/migration/V1__init.sql
+          symbol: "CONSTRAINT no_overlapping_bookings EXCLUDE USING gist"
+          concept: "daterange + оператор && запрещает пересекающиеся активные брони на уровне БД"
+        - path: backend-api/src/test/java/com/batowka/guestbooking/db/SchemaConstraintsTest.java
+          symbol: "overlappingActiveBookingsAreRejected"
+          concept: "пересекающаяся вставка кидает DataIntegrityViolationException"
+      quiz_seeds:
+        - "Почему проверка check-then-insert в Java-коде не спасает от гонки двух параллельных броней?"
+        - "Зачем в миграции CREATE EXTENSION btree_gist, если сам daterange уже умеет GiST-индекс?"
+    - id: half-open-intervals
+      section: "Полуинтервалы [) против включительных диапазонов"
+      code_anchors:
+        - path: backend-api/src/main/java/com/batowka/guestbooking/booking/BookingRepository.java
+          symbol: "findOverlapping"
+          concept: "строгое checkOut > from — день выезда не входит в занятость"
+        - path: backend-api/src/main/java/com/batowka/guestbooking/calendar/BlockedPeriodRepository.java
+          symbol: "findOverlapping"
+          concept: "endDate >= from — у ручных блокировок конец включителен"
+        - path: backend-api/src/test/java/com/batowka/guestbooking/booking/BookingRepositoryTest.java
+          symbol: "checkoutDayDoesNotCountAsOccupied"
+          concept: "тест буквально проверяет полуинтервальную семантику bookings"
+      quiz_seeds:
+        - "Почему день выезда и день заезда следующей брони в один и тот же день — не конфликт?"
+        - "Что было бы, если бы bookings и blocked_periods смешивали включительную и полуинтервальную семантику в одной таблице?"
+    - id: partial-unique-index
+      section: "Частичный уникальный индекс — «одна активная бронь»"
+      code_anchors:
+        - path: backend-api/src/main/resources/db/migration/V1__init.sql
+          symbol: "CREATE UNIQUE INDEX one_confirmed_booking_per_user"
+          concept: "WHERE status = 'CONFIRMED' сужает уникальность только на активные брони"
+        - path: backend-api/src/test/java/com/batowka/guestbooking/db/SchemaConstraintsTest.java
+          symbol: "secondConfirmedBookingForSameUserIsRejected"
+          concept: "второй CONFIRMED для того же пользователя падает с DataIntegrityViolationException"
+      quiz_seeds:
+        - "Чем частичный индекс отличается от обычного UNIQUE INDEX ON bookings (user_id)?"
+        - "Почему CANCELLED-брони того же пользователя не мешают новой брони?"
+    - id: testcontainers-real-postgres
+      section: "Testcontainers: почему настоящий Postgres, а не H2"
+      code_anchors:
+        - path: backend-api/src/test/java/com/batowka/guestbooking/AbstractIntegrationTest.java
+          symbol: "POSTGRES / cleanDatabase"
+          concept: "singleton-контейнер (без @Testcontainers) + TRUNCATE ... RESTART IDENTITY CASCADE перед каждым тестом"
+        - path: docker-compose.dev.yml
+          symbol: "services.postgres.image"
+          concept: "тот же образ postgres:16-alpine, что и в тестовом контейнере — dev-окружение и тесты видят одну и ту же БД"
+      quiz_seeds:
+        - "Почему @Testcontainers (per-class жизненный цикл) не подошёл вместо статического singleton-контейнера?"
+        - "Что конкретно из схемы (daterange, &&, EXCLUDE USING gist, btree_gist) не умеет H2 и почему это опасно для тестов, а не просто неудобно?"
+  bugs_and_lessons:
+    - "Наивная защита «сначала SELECT, потом INSERT» в коде не работает под конкурентным доступом: в READ COMMITTED обе параллельные транзакции не видят чужих незакоммиченных вставок и обе решают, что место свободно. Exclusion constraint переносит эту гарантию на уровень хранилища, где Postgres проверяет её атомарно внутри самой вставки — мораль: гонки между транзакциями нельзя закрыть проверкой в коде, только гарантией БД."
+    - "Тесты на H2 вместо настоящего Postgres в этой схеме были бы хуже, чем бесполезны: они могли бы пройти «зелёным», вообще не проверив exclusion constraint, потому что H2 не умеет daterange/GiST — тестовая инфраструктура должна воспроизводить именно те возможности БД, на которые опирается код, иначе тест создаёт ложную уверенность."
+  prerequisites: [docker-compose-postgres, ci-anatomy]
+---
+
 # Этап 1: Flyway и exclusion constraints
 
 Разбор схемы БД из `backend-api/src/main/resources/db/migration/V1__init.sql` и того,
@@ -28,6 +102,12 @@ Flyway вместо этого требует явных файлов мигра
 знает, какие миграции уже применены к конкретной базе, и при следующем старте
 пропускает их, выполняя только новые. Это даёт воспроизводимость: раскатили один и тот
 же набор `V*.sql` на dev, на CI и на проде — получили гарантированно одинаковую схему.
+
+> **Разбор кода:** открой `backend-api/src/main/resources/application.yml` —
+> смотри `spring.jpa.hibernate.ddl-auto: validate`. Открой
+> `backend-api/src/main/resources/db/migration/V1__init.sql` — пробегись по
+> всем `CREATE TABLE`: обрати внимание, что все семь таблиц этапа 1 описаны
+> одним файлом, а не отдельными миграциями на каждую.
 
 ## 2. Как работает exclusion constraint
 
@@ -85,6 +165,14 @@ GiST-индекса), поэтому вторая параллельная вс�
 `SchemaConstraintsTest.overlappingActiveBookingsAreRejected` — вставка пересекающейся
 брони кидает `DataIntegrityViolationException`.
 
+> **Разбор кода:** открой `backend-api/src/main/resources/db/migration/V1__init.sql`
+> — смотри `CONSTRAINT no_overlapping_bookings EXCLUDE USING gist (...)`: сопоставь
+> каждую часть выражения (`daterange`, `WITH &&`, `WHERE (status IN ...)`) с тем, что
+> только что разобрали. Открой
+> `backend-api/src/test/java/com/batowka/guestbooking/db/SchemaConstraintsTest.java`
+> — смотри `overlappingActiveBookingsAreRejected`: это живая демонстрация, что
+> constraint действительно ловит пересечение, а не просто существует в SQL.
+
 ## 3. Полуинтервалы `[)` против включительных диапазонов
 
 В `bookings` даты хранятся как полуинтервал: `check_in` включён, `check_out` — нет.
@@ -116,6 +204,15 @@ checkIn <= to и checkOut > from» — строгое `>` для checkOut име
 раз и навсегда: открыл `bookings` — знаешь, что выезд не включён; открыл
 `blocked_periods` — знаешь, что включён.
 
+> **Разбор кода:** открой
+> `backend-api/src/main/java/com/batowka/guestbooking/booking/BookingRepository.java`
+> — смотри `findOverlapping` и строгое `checkOut > from`. Открой
+> `backend-api/src/main/java/com/batowka/guestbooking/calendar/BlockedPeriodRepository.java`
+> — смотри `findOverlapping` и нестрогое `endDate >= from`: сравни два условия
+> рядом. Открой
+> `backend-api/src/test/java/com/batowka/guestbooking/booking/BookingRepositoryTest.java`
+> — смотри `checkoutDayDoesNotCountAsOccupied`.
+
 ## 4. Частичный уникальный индекс — «одна активная бронь»
 
 ```sql
@@ -139,6 +236,12 @@ CREATE UNIQUE INDEX one_confirmed_booking_per_user
 `CANCELLED`-бронь вообще не мешает ни другому пользователю на те же даты, ни (что здесь
 не тестируется впрямую, но следует из того же механизма) новой брони того же
 пользователя.
+
+> **Разбор кода:** открой `backend-api/src/main/resources/db/migration/V1__init.sql`
+> — смотри `CREATE UNIQUE INDEX one_confirmed_booking_per_user ... WHERE status =
+> 'CONFIRMED'`. Открой
+> `backend-api/src/test/java/com/batowka/guestbooking/db/SchemaConstraintsTest.java`
+> — смотри `secondConfirmedBookingForSameUserIsRejected`.
 
 ## 5. Testcontainers: почему настоящий Postgres, а не H2
 
@@ -178,3 +281,9 @@ Spring поднимает всё заново — singleton-контейнер �
 выполняет `TRUNCATE ... RESTART IDENTITY CASCADE` по всем таблицам — так каждый `@Test`
 стартует с гарантированно пустой базой и предсказуемыми id (`RESTART IDENTITY`), не
 дожидаясь пересоздания инфраструктуры.
+
+> **Разбор кода:** открой
+> `backend-api/src/test/java/com/batowka/guestbooking/AbstractIntegrationTest.java`
+> — смотри статическое поле `POSTGRES` (без `@Testcontainers`/`@Container`) и метод
+> `cleanDatabase()` рядом: это и есть singleton-контейнер + TRUNCATE, о которых
+> только что шла речь.
