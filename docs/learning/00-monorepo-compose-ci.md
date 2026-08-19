@@ -18,6 +18,11 @@ tutor:
       quiz_seeds:
         - "Почему общий contracts/ снижает риск того, что backend обновили, а bot-service тихо сломался?"
         - "Какой минус монорепо назван в тексте и чем он закрыт в ci.yml уже на этапе 0?"
+      decisions:
+        - choice: "Монорепо: backend-api, bot-service, frontend, contracts в одном git-репозитории"
+          alternatives: "Три-четыре отдельных репозитория, по одному на сервис"
+          why: "Общий contracts/ — единственный источник правды о формате событий сразу для двух языков; изменения на границе сервисов (новое событие → producer в Java + consumer в Go) идут одним PR, а не несколькими синхронизированными; один CI-workflow вместо трёх раздельных конфигов"
+          price: "Репозиторий раздувается по мере роста, и CI-job нужно явно ограничивать по директории (defaults.run.working-directory), иначе job попытается собрать ещё не написанный сервис"
     - id: docker-compose-postgres
       section: "Как читать docker-compose.dev.yml"
       code_anchors:
@@ -42,6 +47,11 @@ tutor:
       quiz_seeds:
         - "Почему INTERNAL рекламирует kafka:19092, а EXTERNAL — localhost:9092, хотя это один и тот же брокер?"
         - "Зачем нужен отдельный CONTROLLER listener, если клиентам он вообще не нужен?"
+      decisions:
+        - choice: "Kafka в режиме KRaft (Kafka Raft), без ZooKeeper"
+          alternatives: "классическая связка Kafka + ZooKeeper"
+          why: "начиная с Kafka 3.x KRaft — рекомендуемый режим: брокер сам выступает и data-, и control-плоскостью, в dev-compose не нужен отдельный контейнер ZooKeeper"
+          price: "не избавляет от ручной настройки сети: всё равно нужно вручную объявить три listener'а (EXTERNAL/INTERNAL/CONTROLLER) и controller quorum — простота архитектуры не означает простую конфигурацию"
     - id: ci-anatomy
       section: "Анатомия GitHub Actions"
       code_anchors:
