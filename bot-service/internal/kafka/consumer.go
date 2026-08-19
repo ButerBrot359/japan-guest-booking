@@ -29,30 +29,42 @@ func newConsumerCore(sender Sender) *consumerCore {
 	return &consumerCore{sender: sender, seen: make(map[string]bool)}
 }
 
-func (c *consumerCore) handle(ctx context.Context, raw []byte) {
+func (c *consumerCore) handle(ctx context.Context, raw []byte) error {
 	var env events.Envelope
 	if err := json.Unmarshal(raw, &env); err != nil {
 		log.Printf("битое событие, пропускаю: %v", err)
-		return
+		return nil
 	}
 	if c.seen[env.EventID] {
-		return // at-least-once: дубликат
+		return nil // at-least-once: дубликат
 	}
-	c.remember(env.EventID)
 	switch env.EventType {
 	case "WELCOME":
 		var w events.Welcome
 		if err := json.Unmarshal(env.Payload, &w); err != nil {
 			log.Printf("битый payload WELCOME: %v", err)
-			return
+			return nil
 		}
 		text := "Привет, " + w.Name + "! Telegram привязан — теперь сюда будут " +
 			"приходить коды подтверждения и уведомления о бронях."
-		if err := c.sender.SendMessage(ctx, w.ChatID, text, false); err != nil {
-			log.Printf("отправка WELCOME chat_id=%d: %v", w.ChatID, err)
+		return c.send(ctx, env.EventID, w.ChatID, text)
+	case "OTP_CODE":
+		var p events.OtpCode
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			log.Printf("битый payload OTP_CODE: %v", err)
+			return nil
 		}
+		return c.send(ctx, env.EventID, p.ChatID,
+			"Код подтверждения: "+p.Code+". Действует 5 минут.")
+	case "BOOKING_CONFIRMED":
+		return c.renderBooking(ctx, env, "Бронь подтверждена")
+	case "BOOKING_CANCELLED":
+		return c.renderBooking(ctx, env, "Бронь отменена")
+	case "BOOKING_RESCHEDULED":
+		return c.renderBooking(ctx, env, "Бронь перенесена")
 	default:
 		log.Printf("незнакомый event_type %q — пропускаю (совместимость вперёд)", env.EventType)
+		return nil
 	}
 }
 
@@ -65,10 +77,41 @@ func (c *consumerCore) remember(eventID string) {
 	}
 }
 
+func (c *consumerCore) send(ctx context.Context, eventID string, chatID int64, text string) error {
+	if err := c.sender.SendMessage(ctx, chatID, text, false); err != nil {
+		return err
+	}
+	c.remember(eventID)
+	return nil
+}
+
+func (c *consumerCore) renderBooking(ctx context.Context, env events.Envelope, prefix string) error {
+	var p events.BookingEvent
+	if err := json.Unmarshal(env.Payload, &p); err != nil {
+		log.Printf("битый payload %s: %v", env.EventType, err)
+		return nil
+	}
+	return c.send(ctx, env.EventID, p.ChatID,
+		prefix+": "+p.GuestName+", заезд "+p.CheckIn+", выезд "+p.CheckOut+".")
+}
+
+// kafkaReader — минимум от *kafkago.Reader, нужный Run (позволяет подменить фейком в тестах).
+type kafkaReader interface {
+	FetchMessage(ctx context.Context) (kafkago.Message, error)
+	CommitMessages(ctx context.Context, msgs ...kafkago.Message) error
+	Close() error
+}
+
+const defaultRetryBackoff = 3 * time.Second
+
 // Consumer — Kafka-транспорт вокруг consumerCore.
 type Consumer struct {
-	reader *kafkago.Reader
+	reader kafkaReader
 	core   *consumerCore
+
+	// retryBackoff — пауза между попытками при сбое fetch/handle. Поле (а не константа),
+	// чтобы тесты могли подставить микросекундное значение вместо ожидания реальных 3с.
+	retryBackoff time.Duration
 }
 
 func NewConsumer(brokers []string, sender Sender) *Consumer {
@@ -78,11 +121,34 @@ func NewConsumer(brokers []string, sender Sender) *Consumer {
 			GroupID: "bot-service",
 			Topic:   "notifications.outbound",
 		}),
-		core: newConsumerCore(sender),
+		core:         newConsumerCore(sender),
+		retryBackoff: defaultRetryBackoff,
 	}
 }
 
-// Run читает до отмены контекста; offset коммитится ПОСЛЕ обработки (at-least-once).
+// sleepOrDone ждёт retryBackoff (или его дефолт, если поле не выставлено — например, в старых
+// вызовах Consumer{...} напрямую) либо отмену контекста, что наступит раньше. Возвращает true,
+// если нужно прекратить работу (контекст отменён).
+func (c *Consumer) sleepOrDone(ctx context.Context) (cancelled bool) {
+	backoff := c.retryBackoff
+	if backoff <= 0 {
+		backoff = defaultRetryBackoff
+	}
+	select {
+	case <-time.After(backoff):
+		return false
+	case <-ctx.Done():
+		return true
+	}
+}
+
+// Run читает до отмены контекста. kafka-go FetchMessage продвигает позицию ридера в памяти сразу
+// при вызове — если после сбоя обработки просто продолжить цикл, FetchMessage вернёт СЛЕДУЮЩЕЕ
+// сообщение, а сбойное будет потеряно безвозвратно (коммит для него так и не случится, но и
+// перечитано оно не будет). Поэтому при сбое отправки ретраим ОДНО И ТО ЖЕ уже полученное
+// сообщение во внутреннем цикле и коммитим офсет только после успеха (at-least-once). Это
+// осознанный трейдофф head-of-line blocking: пока текущее сообщение не отправлено, следующие не
+// читаются.
 func (c *Consumer) Run(ctx context.Context) {
 	for ctx.Err() == nil {
 		msg, err := c.reader.FetchMessage(ctx)
@@ -90,15 +156,22 @@ func (c *Consumer) Run(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			log.Printf("kafka fetch: %v — повтор через 3с", err)
-			select {
-			case <-time.After(3 * time.Second):
-			case <-ctx.Done():
+			log.Printf("kafka fetch: %v — повтор через %s", err, c.retryBackoff)
+			if c.sleepOrDone(ctx) {
 				return
 			}
 			continue
 		}
-		c.core.handle(ctx, msg.Value)
+		for {
+			if err := c.core.handle(ctx, msg.Value); err == nil {
+				break
+			} else {
+				log.Printf("обработка события: %v — повтор через %s", err, c.retryBackoff)
+				if c.sleepOrDone(ctx) {
+					return
+				}
+			}
+		}
 		if err := c.reader.CommitMessages(ctx, msg); err != nil {
 			log.Printf("kafka commit: %v", err)
 		}

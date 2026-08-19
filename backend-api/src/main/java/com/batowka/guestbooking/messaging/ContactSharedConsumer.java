@@ -14,6 +14,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -28,26 +29,54 @@ public class ContactSharedConsumer {
     @KafkaListener(topics = "telegram.inbound", groupId = "backend-api")
     @Transactional
     public void onEvent(String message) {
-        JsonNode envelope = objectMapper.readTree(message);
-        String eventId = envelope.get("event_id").asText();
+        JsonNode envelope;
+        try {
+            envelope = objectMapper.readTree(message);
+        } catch (RuntimeException e) {
+            log.warn("Не-JSON сообщение в telegram.inbound, пропускаю");
+            return;
+        }
+        JsonNode eventIdNode = envelope.get("event_id");
+        JsonNode typeNode = envelope.get("event_type");
+        if (eventIdNode == null || typeNode == null) {
+            log.warn("Событие без event_id/event_type, пропускаю");
+            return;
+        }
+        String eventId = eventIdNode.asString();
+        try {
+            UUID.fromString(eventId);
+        } catch (IllegalArgumentException e) {
+            log.warn("event_id не UUID, пропускаю: {}", eventId);
+            return;
+        }
         Integer seen = jdbc.queryForObject(
                 "select count(*) from processed_events where event_id = ?::uuid",
                 Integer.class, eventId);
         if (seen != null && seen > 0) {
             return; // at-least-once: дубликат уже обработан
         }
-        if ("CONTACT_SHARED".equals(envelope.get("event_type").asText())) {
+        if ("CONTACT_SHARED".equals(typeNode.asString())) {
             handleContactShared(envelope.get("payload"));
         } else {
             log.info("Незнакомый event_type в telegram.inbound: {}",
-                    envelope.get("event_type").asText());
+                    typeNode.asString());
         }
         jdbc.update("insert into processed_events(event_id) values (?::uuid)", eventId);
     }
 
     private void handleContactShared(JsonNode payload) {
-        long chatId = payload.get("chat_id").asLong();
-        String raw = payload.get("phone").asText();
+        if (payload == null) {
+            log.warn("CONTACT_SHARED без payload, пропускаю");
+            return;
+        }
+        JsonNode chatIdNode = payload.get("chat_id");
+        JsonNode phoneNode = payload.get("phone");
+        if (chatIdNode == null || phoneNode == null) {
+            log.warn("CONTACT_SHARED без chat_id или phone, пропускаю");
+            return;
+        }
+        long chatId = chatIdNode.asLong();
+        String raw = phoneNode.asString();
         Optional<String> phone = Phones.normalize(raw.startsWith("+") ? raw : "+" + raw);
         if (phone.isEmpty()) {
             log.warn("CONTACT_SHARED с ненормализуемым телефоном, игнорирую");

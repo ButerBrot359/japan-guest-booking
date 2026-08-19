@@ -4,8 +4,19 @@ import com.batowka.guestbooking.auth.InvalidCredentialsException;
 import com.batowka.guestbooking.auth.InvalidPhoneException;
 import com.batowka.guestbooking.auth.RateLimitExceededException;
 import com.batowka.guestbooking.auth.UnknownPhoneException;
+import com.batowka.guestbooking.booking.BookingExpiredException;
+import com.batowka.guestbooking.booking.DatesTakenException;
+import com.batowka.guestbooking.booking.InvalidBookingDatesException;
+import com.batowka.guestbooking.booking.NotYourBookingException;
+import com.batowka.guestbooking.booking.OverlapsOwnBookingException;
+import com.batowka.guestbooking.booking.TelegramNotLinkedException;
 import com.batowka.guestbooking.calendar.InvalidCalendarRangeException;
+import com.batowka.guestbooking.otp.CodeExpiredException;
+import com.batowka.guestbooking.otp.InvalidCodeException;
+import com.batowka.guestbooking.otp.NoActiveCodeException;
+import com.batowka.guestbooking.otp.ResendTooSoonException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -73,6 +84,72 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
     public ApiError rateLimited(RateLimitExceededException ex) {
         return new ApiError("RATE_LIMITED", ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCodeException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError invalidCode(InvalidCodeException ex) {
+        return new ApiError("INVALID_CODE", ex.getMessage());
+    }
+
+    @ExceptionHandler(CodeExpiredException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError codeExpired(CodeExpiredException ex) {
+        return new ApiError("CODE_EXPIRED", ex.getMessage());
+    }
+
+    @ExceptionHandler(NoActiveCodeException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError noActiveCode(NoActiveCodeException ex) {
+        return new ApiError("NO_ACTIVE_CODE", ex.getMessage());
+    }
+
+    @ExceptionHandler(ResendTooSoonException.class)
+    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
+    public ApiError resendTooSoon(ResendTooSoonException ex) {
+        return new ApiError("RESEND_TOO_SOON", ex.getMessage());
+    }
+
+    @ExceptionHandler(DatesTakenException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiError datesTaken(DatesTakenException ex) {
+        return new ApiError("DATES_TAKEN", ex.getMessage());
+    }
+
+    @ExceptionHandler(OverlapsOwnBookingException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiError overlapsOwnBooking(OverlapsOwnBookingException ex) {
+        return new ApiError("OVERLAPS_OWN_BOOKING", ex.getMessage());
+    }
+
+    @ExceptionHandler(TelegramNotLinkedException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiError telegramNotLinked(TelegramNotLinkedException ex) {
+        return new ApiError("TELEGRAM_NOT_LINKED", ex.getMessage());
+    }
+
+    @ExceptionHandler(NotYourBookingException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ApiError notYourBooking(NotYourBookingException ex) {
+        return new ApiError("FORBIDDEN", ex.getMessage());
+    }
+
+    @ExceptionHandler(BookingExpiredException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiError bookingExpired(BookingExpiredException ex) {
+        return new ApiError("BOOKING_EXPIRED", ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidBookingDatesException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError invalidBookingDates(InvalidBookingDatesException ex) {
+        return new ApiError("VALIDATION_ERROR", ex.getMessage());
+    }
+
+    @ExceptionHandler(EmptyResultDataAccessException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiError notFound(EmptyResultDataAccessException ex) {
+        return new ApiError("NOT_FOUND", "Бронь не найдена");
     }
 
     @ExceptionHandler(Exception.class)

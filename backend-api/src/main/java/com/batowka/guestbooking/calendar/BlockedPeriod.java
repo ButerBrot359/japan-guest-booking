@@ -26,6 +26,7 @@ public class BlockedPeriod {
     @Column(name = "end_date", nullable = false)
     private LocalDate endDate;
 
+    @Column(length = 200)
     private String reason;
 
     @Column(name = "created_at", insertable = false, updatable = false)
