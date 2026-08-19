@@ -59,8 +59,11 @@ BCrypt. Секреты в git не попадают; для локальной �
   `AccessDeniedHandler`).
 - **`AuthController`** — login / admin-login / logout (контракты в §5).
 - **`MeController`** — `GET /api/me`.
-- **`LoginRateLimiter`** — bucket4j, in-memory, 5 попыток/мин на IP, общий
-  для обоих логинов; превышение → 429.
+- **`LoginRateLimiter`** — собственная in-memory реализация «скользящего
+  окна» (~20 строк, ConcurrentHashMap по IP), 5 попыток/мин на IP, общий
+  для обоих логинов; превышение → 429. (Решение при планировании: вместо
+  bucket4j — у него нестабильные Maven-координаты между версиями, а свой
+  limiter проще и нагляднее для обучения.)
 - **`AdminSeeder`** — см. §2.
 - **`common.GlobalExceptionHandler`** — добавить catch-all
   `@ExceptionHandler(Exception.class)` → `500 {"code":"INTERNAL_ERROR"}`
