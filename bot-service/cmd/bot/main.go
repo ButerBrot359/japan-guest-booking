@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/buterbrot359/japan-guest-booking/bot-service/internal/kafka"
 	"github.com/buterbrot359/japan-guest-booking/bot-service/internal/telegram"
@@ -35,7 +36,24 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() { defer wg.Done(); poller.Run(ctx) }()
-	go func() { defer wg.Done(); consumer.Run(ctx) }()
+	go func() {
+		defer wg.Done()
+		for ctx.Err() == nil {
+			if err := kafka.EnsureTopic(brokers, "notifications.outbound"); err != nil {
+				log.Printf("ensure topic: %v — повтор через 3с", err)
+				select {
+				case <-time.After(3 * time.Second):
+					continue
+				case <-ctx.Done():
+					return
+				}
+			}
+			break
+		}
+		if ctx.Err() == nil {
+			consumer.Run(ctx)
+		}
+	}()
 	log.Println("bot-service запущен; Ctrl+C для остановки")
 	wg.Wait()
 }
