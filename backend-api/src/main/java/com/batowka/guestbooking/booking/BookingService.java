@@ -128,14 +128,70 @@ public class BookingService {
                 ((java.sql.Date) dates.get("check_out")).toLocalDate());
     }
 
-    // заглушки — реализуются в Task 6; до тех пор недостижимы (челленджи этих
-    // action появятся только в Task 6)
+    @Transactional
+    public void requestReschedule(Long userId, long bookingId,
+                                  LocalDate checkIn, LocalDate checkOut) {
+        UserAccount user = requireTelegramLinked(userId);
+        requireOwnership(bookingId, userId);
+        validateDates(checkIn, checkOut);
+        requireStatus(bookingId, "CONFIRMED");
+        otp.issue(user, "RESCHEDULE", Map.of(
+                "booking_id", bookingId,
+                "check_in", checkIn.toString(),
+                "check_out", checkOut.toString()));
+    }
+
+    @Transactional
+    public void requestCancel(Long userId, long bookingId) {
+        UserAccount user = requireTelegramLinked(userId);
+        requireOwnership(bookingId, userId);
+        requireStatus(bookingId, "CONFIRMED");
+        otp.issue(user, "CANCEL", Map.of("booking_id", bookingId));
+    }
+
+    private void requireStatus(long bookingId, String expected) {
+        String status = jdbc.queryForObject(
+                "select status from bookings where id = ?", String.class, bookingId);
+        if (!expected.equals(status)) {
+            throw new BookingExpiredException();
+        }
+    }
+
     private void applyReschedule(UserAccount user, long bookingId, JsonNode payload) {
-        throw new UnsupportedOperationException("Task 6");
+        LocalDate in = LocalDate.parse(payload.get("check_in").asString());
+        LocalDate out = LocalDate.parse(payload.get("check_out").asString());
+        int updated;
+        try {
+            updated = jdbc.update("""
+                    update bookings set check_in = ?, check_out = ?
+                    where id = ? and status = 'CONFIRMED'
+                    """, in, out, bookingId);
+        } catch (DataIntegrityViolationException e) {
+            // Даты заняли за 5 минут — вариант A. Исключение откатывает ВСЮ
+            // транзакцию confirm, включая пометку челленджа USED: челлендж
+            // остаётся PENDING, гость может запросить новый перенос (новый
+            // PATCH вытеснит челлендж) или повторить confirm.
+            throw new DatesTakenException();
+        }
+        if (updated == 0) {
+            throw new BookingExpiredException();
+        }
+        notifyBookingEvent(user, "BOOKING_RESCHEDULED", in, out);
     }
 
     private void applyCancel(UserAccount user, long bookingId) {
-        throw new UnsupportedOperationException("Task 6");
+        Map<String, Object> dates = jdbc.queryForMap(
+                "select check_in, check_out from bookings where id = ?", bookingId);
+        int updated = jdbc.update("""
+                update bookings set status = 'CANCELLED', cancelled_by = 'GUEST'
+                where id = ? and status = 'CONFIRMED'
+                """, bookingId);
+        if (updated == 0) {
+            throw new BookingExpiredException();
+        }
+        notifyBookingEvent(user, "BOOKING_CANCELLED",
+                ((java.sql.Date) dates.get("check_in")).toLocalDate(),
+                ((java.sql.Date) dates.get("check_out")).toLocalDate());
     }
 
     /** Событие гостю + админу (если у админа привязан Telegram). */
