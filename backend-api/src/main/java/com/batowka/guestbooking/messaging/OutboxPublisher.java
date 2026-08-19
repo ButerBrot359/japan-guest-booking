@@ -27,10 +27,7 @@ public class OutboxPublisher {
                 """);
         for (Map<String, Object> row : rows) {
             try {
-                String payload = (String) row.get("payload");
-                // PostgreSQL может переформатировать JSON с пробелами; нужен компактный формат
-                String compactPayload = payload.replaceAll(": ", ":").replaceAll(", ", ",");
-                kafka.send((String) row.get("topic"), compactPayload).join();
+                kafka.send((String) row.get("topic"), (String) row.get("payload")).join();
             } catch (Exception e) {
                 log.warn("Kafka недоступна, отправка outbox id={} отложена", row.get("id"), e);
                 return; // остальные строки подождут следующего цикла — порядок сохраняется
