@@ -34,6 +34,7 @@ public class Booking {
     @Column(nullable = false)
     private BookingStatus status;
 
+    @Column(length = 500)
     private String comment;
 
     @Enumerated(EnumType.STRING)

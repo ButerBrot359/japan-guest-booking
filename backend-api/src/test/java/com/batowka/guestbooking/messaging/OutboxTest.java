@@ -67,10 +67,10 @@ class OutboxTest extends AbstractIntegrationTest {
             List<String> messages = consumer.poll(Duration.ofSeconds(15));
             assertThat(messages).hasSize(1);
             tools.jackson.databind.JsonNode parsed = objectMapper.readTree(messages.getFirst());
-            assertThat(parsed.get("event_type").asText()).isEqualTo("WELCOME");
-            assertThat(parsed.get("event_id").asText()).isNotBlank();
-            assertThat(parsed.get("occurred_at").asText()).isNotBlank();
-            assertThat(parsed.get("payload").get("name").asText()).isEqualTo("Маша");
+            assertThat(parsed.get("event_type").asString()).isEqualTo("WELCOME");
+            assertThat(parsed.get("event_id").asString()).isNotBlank();
+            assertThat(parsed.get("occurred_at").asString()).isNotBlank();
+            assertThat(parsed.get("payload").get("name").asString()).isEqualTo("Маша");
         }
 
         assertThat(jdbc.queryForObject(
@@ -101,7 +101,7 @@ class OutboxTest extends AbstractIntegrationTest {
             boolean found = false;
             for (String message : messages) {
                 tools.jackson.databind.JsonNode parsed = objectMapper.readTree(message);
-                String name = parsed.get("payload").get("name").asText();
+                String name = parsed.get("payload").get("name").asString();
                 if ("Смирнов, Иван: старший".equals(name)) {
                     found = true;
                     break;

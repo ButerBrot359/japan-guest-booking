@@ -111,4 +111,17 @@ class ContactSharedConsumerTest extends AbstractIntegrationTest {
                 "select count(*) from outbox where event_type = 'WELCOME'",
                 Integer.class)).isEqualTo(2);
     }
+
+    @Test
+    void malformedMessageIsSkippedAndNextOneProcessed() throws Exception {
+        givenFriend("+81300000009");
+
+        kafka.send("telegram.inbound", "{\"мусор\": true}").join();
+        kafka.send("telegram.inbound", "вообще не json").join();
+        sendAndAwaitProcessed(UUID.randomUUID().toString(), 555009L, "81300000009");
+
+        assertThat(jdbc.queryForObject(
+                "select telegram_chat_id from users where phone = '+81300000009'",
+                Long.class)).isEqualTo(555009L);
+    }
 }
