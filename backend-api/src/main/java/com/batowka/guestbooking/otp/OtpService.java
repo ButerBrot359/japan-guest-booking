@@ -1,0 +1,111 @@
+package com.batowka.guestbooking.otp;
+
+import com.batowka.guestbooking.messaging.OutboxWriter;
+import com.batowka.guestbooking.user.UserAccount;
+import lombok.RequiredArgsConstructor;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+
+@Service
+@RequiredArgsConstructor
+public class OtpService {
+
+    static final int MAX_ATTEMPTS = 3;
+    static final Duration TTL = Duration.ofMinutes(5);
+
+    private final JdbcTemplate jdbc;
+    private final PasswordEncoder encoder;
+    private final OutboxWriter outbox;
+    private final ObjectMapper objectMapper;
+    private final SecureRandom random = new SecureRandom();
+
+    public record ChallengeResult(String action, JsonNode payload) {
+    }
+
+    /** Выпускает код: вытесняет старые челленджи гостя, пишет OTP_CODE в outbox. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void issue(UserAccount user, String action, Map<String, Object> payload) {
+        jdbc.update("""
+                update otp_challenges set status = 'EXPIRED'
+                where user_id = ? and status = 'PENDING'
+                """, user.getId());
+        String code = String.format("%06d", random.nextInt(1_000_000));
+        jdbc.update("""
+                insert into otp_challenges(user_id, action, payload, code_hash, expires_at)
+                values (?, ?, ?::jsonb, ?, now() + interval '5 minutes')
+                """, user.getId(), action,
+                objectMapper.writeValueAsString(payload), encoder.encode(code));
+        outbox.write("notifications.outbound", "OTP_CODE", Map.of(
+                "chat_id", user.getTelegramChatId(),
+                "code", code,
+                "action", action,
+                "expires_at", Instant.now().plus(TTL).toString()));
+    }
+
+    /** Проверяет код активного челленджа гостя для конкретной брони. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ChallengeResult verify(Long userId, long bookingId, String code) {
+        Map<String, Object> row = findActive(userId, bookingId);
+        long id = ((Number) row.get("id")).longValue();
+        if (((java.sql.Timestamp) row.get("expires_at")).toInstant().isBefore(Instant.now())) {
+            expire(id);
+            throw new InvalidCodeException();
+        }
+        if (!encoder.matches(code, (String) row.get("code_hash"))) {
+            // инкремент только при неправильном коде: параллельный перебор не обходит счётчик
+            Integer attempts = jdbc.queryForObject(
+                    "update otp_challenges set attempts = coalesce(attempts, 0) + 1 where id = ? returning attempts",
+                    Integer.class, id);
+            if (attempts != null && attempts >= MAX_ATTEMPTS) {
+                expire(id);
+                throw new CodeExpiredException();
+            }
+            throw new InvalidCodeException();
+        }
+        jdbc.update("update otp_challenges set status = 'USED' where id = ?", id);
+        return new ChallengeResult((String) row.get("action"),
+                objectMapper.readTree((String) row.get("payload")));
+    }
+
+    /** Перевыпуск кода той же операции; не чаще раза в минуту. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void resend(UserAccount user, long bookingId) {
+        Map<String, Object> row = findActive(user.getId(), bookingId);
+        Instant createdAt = ((java.sql.Timestamp) row.get("created_at")).toInstant();
+        if (createdAt.isAfter(Instant.now().minus(Duration.ofMinutes(1)))) {
+            throw new ResendTooSoonException();
+        }
+        JsonNode payload = objectMapper.readTree((String) row.get("payload"));
+        issue(user, (String) row.get("action"),
+                objectMapper.convertValue(payload, Map.class));
+    }
+
+    private Map<String, Object> findActive(Long userId, long bookingId) {
+        try {
+            return jdbc.queryForMap("""
+                    select id, action, payload::text as payload, code_hash,
+                           expires_at, created_at
+                    from otp_challenges
+                    where user_id = ? and status = 'PENDING'
+                      and (payload->>'booking_id')::bigint = ?
+                    """, userId, bookingId);
+        } catch (EmptyResultDataAccessException e) {
+            throw new NoActiveCodeException();
+        }
+    }
+
+    private void expire(long id) {
+        jdbc.update("update otp_challenges set status = 'EXPIRED' where id = ?", id);
+    }
+}

@@ -5,6 +5,10 @@ import com.batowka.guestbooking.auth.InvalidPhoneException;
 import com.batowka.guestbooking.auth.RateLimitExceededException;
 import com.batowka.guestbooking.auth.UnknownPhoneException;
 import com.batowka.guestbooking.calendar.InvalidCalendarRangeException;
+import com.batowka.guestbooking.otp.CodeExpiredException;
+import com.batowka.guestbooking.otp.InvalidCodeException;
+import com.batowka.guestbooking.otp.NoActiveCodeException;
+import com.batowka.guestbooking.otp.ResendTooSoonException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -73,6 +77,30 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
     public ApiError rateLimited(RateLimitExceededException ex) {
         return new ApiError("RATE_LIMITED", ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCodeException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError invalidCode(InvalidCodeException ex) {
+        return new ApiError("INVALID_CODE", ex.getMessage());
+    }
+
+    @ExceptionHandler(CodeExpiredException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError codeExpired(CodeExpiredException ex) {
+        return new ApiError("CODE_EXPIRED", ex.getMessage());
+    }
+
+    @ExceptionHandler(NoActiveCodeException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError noActiveCode(NoActiveCodeException ex) {
+        return new ApiError("NO_ACTIVE_CODE", ex.getMessage());
+    }
+
+    @ExceptionHandler(ResendTooSoonException.class)
+    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
+    public ApiError resendTooSoon(ResendTooSoonException ex) {
+        return new ApiError("RESEND_TOO_SOON", ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)
