@@ -95,10 +95,23 @@ func (c *consumerCore) renderBooking(ctx context.Context, env events.Envelope, p
 		prefix+": "+p.GuestName+", заезд "+p.CheckIn+", выезд "+p.CheckOut+".")
 }
 
+// kafkaReader — минимум от *kafkago.Reader, нужный Run (позволяет подменить фейком в тестах).
+type kafkaReader interface {
+	FetchMessage(ctx context.Context) (kafkago.Message, error)
+	CommitMessages(ctx context.Context, msgs ...kafkago.Message) error
+	Close() error
+}
+
+const defaultRetryBackoff = 3 * time.Second
+
 // Consumer — Kafka-транспорт вокруг consumerCore.
 type Consumer struct {
-	reader *kafkago.Reader
+	reader kafkaReader
 	core   *consumerCore
+
+	// retryBackoff — пауза между попытками при сбое fetch/handle. Поле (а не константа),
+	// чтобы тесты могли подставить микросекундное значение вместо ожидания реальных 3с.
+	retryBackoff time.Duration
 }
 
 func NewConsumer(brokers []string, sender Sender) *Consumer {
@@ -108,11 +121,34 @@ func NewConsumer(brokers []string, sender Sender) *Consumer {
 			GroupID: "bot-service",
 			Topic:   "notifications.outbound",
 		}),
-		core: newConsumerCore(sender),
+		core:         newConsumerCore(sender),
+		retryBackoff: defaultRetryBackoff,
 	}
 }
 
-// Run читает до отмены контекста; offset коммитится ТОЛЬКО после успешной обработки (at-least-once).
+// sleepOrDone ждёт retryBackoff (или его дефолт, если поле не выставлено — например, в старых
+// вызовах Consumer{...} напрямую) либо отмену контекста, что наступит раньше. Возвращает true,
+// если нужно прекратить работу (контекст отменён).
+func (c *Consumer) sleepOrDone(ctx context.Context) (cancelled bool) {
+	backoff := c.retryBackoff
+	if backoff <= 0 {
+		backoff = defaultRetryBackoff
+	}
+	select {
+	case <-time.After(backoff):
+		return false
+	case <-ctx.Done():
+		return true
+	}
+}
+
+// Run читает до отмены контекста. kafka-go FetchMessage продвигает позицию ридера в памяти сразу
+// при вызове — если после сбоя обработки просто продолжить цикл, FetchMessage вернёт СЛЕДУЮЩЕЕ
+// сообщение, а сбойное будет потеряно безвозвратно (коммит для него так и не случится, но и
+// перечитано оно не будет). Поэтому при сбое отправки ретраим ОДНО И ТО ЖЕ уже полученное
+// сообщение во внутреннем цикле и коммитим офсет только после успеха (at-least-once). Это
+// осознанный трейдофф head-of-line blocking: пока текущее сообщение не отправлено, следующие не
+// читаются.
 func (c *Consumer) Run(ctx context.Context) {
 	for ctx.Err() == nil {
 		msg, err := c.reader.FetchMessage(ctx)
@@ -120,22 +156,21 @@ func (c *Consumer) Run(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			log.Printf("kafka fetch: %v — повтор через 3с", err)
-			select {
-			case <-time.After(3 * time.Second):
-			case <-ctx.Done():
+			log.Printf("kafka fetch: %v — повтор через %s", err, c.retryBackoff)
+			if c.sleepOrDone(ctx) {
 				return
 			}
 			continue
 		}
-		if err := c.core.handle(ctx, msg.Value); err != nil {
-			log.Printf("обработка события: %v — повтор через 3с", err)
-			select {
-			case <-time.After(3 * time.Second):
-			case <-ctx.Done():
-				return
+		for {
+			if err := c.core.handle(ctx, msg.Value); err == nil {
+				break
+			} else {
+				log.Printf("обработка события: %v — повтор через %s", err, c.retryBackoff)
+				if c.sleepOrDone(ctx) {
+					return
+				}
 			}
-			continue
 		}
 		if err := c.reader.CommitMessages(ctx, msg); err != nil {
 			log.Printf("kafka commit: %v", err)

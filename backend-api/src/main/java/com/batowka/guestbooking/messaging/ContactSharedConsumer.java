@@ -14,6 +14,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -42,6 +43,12 @@ public class ContactSharedConsumer {
             return;
         }
         String eventId = eventIdNode.asString();
+        try {
+            UUID.fromString(eventId);
+        } catch (IllegalArgumentException e) {
+            log.warn("event_id не UUID, пропускаю: {}", eventId);
+            return;
+        }
         Integer seen = jdbc.queryForObject(
                 "select count(*) from processed_events where event_id = ?::uuid",
                 Integer.class, eventId);

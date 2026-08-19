@@ -124,4 +124,18 @@ class ContactSharedConsumerTest extends AbstractIntegrationTest {
                 "select telegram_chat_id from users where phone = '+81300000009'",
                 Long.class)).isEqualTo(555009L);
     }
+
+    @Test
+    void nonUuidEventIdIsSkippedAndNextOneProcessed() throws Exception {
+        givenFriend("+81300000010");
+
+        // event_id не в формате UUID уронил бы "?::uuid" в JdbcTemplate — консьюмер обязан
+        // отбраковать его ДО дедуп-запроса, а не уйти в бесконечный цикл ретраев
+        kafka.send("telegram.inbound", contactShared("не-uuid", 555010L, "81300000010")).join();
+        sendAndAwaitProcessed(UUID.randomUUID().toString(), 555010L, "81300000010");
+
+        assertThat(jdbc.queryForObject(
+                "select telegram_chat_id from users where phone = '+81300000010'",
+                Long.class)).isEqualTo(555010L);
+    }
 }
