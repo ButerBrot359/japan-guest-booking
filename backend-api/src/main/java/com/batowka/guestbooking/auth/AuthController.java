@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,8 +26,12 @@ public class AuthController {
 
     private final UserAccountRepository users;
     private final JwtService jwt;
+    private final PasswordEncoder encoder;
 
     public record LoginRequest(@NotBlank String phone) {
+    }
+
+    public record AdminLoginRequest(@NotBlank String phone, @NotBlank String password) {
     }
 
     @PostMapping("/login")
@@ -37,6 +42,18 @@ public class AuthController {
                 .filter(u -> u.getRole() == Role.FRIEND)
                 .orElseThrow(UnknownPhoneException::new);
         return noContentWithCookie(jwt.issue(user.getId(), user.getRole()), COOKIE_TTL);
+    }
+
+    @PostMapping("/admin-login")
+    public ResponseEntity<Void> adminLogin(@Valid @RequestBody AdminLoginRequest body) {
+        // Единый 401 на любой провал: не раскрываем, что именно не совпало
+        UserAccount admin = Phones.normalize(body.phone())
+                .flatMap(users::findByPhone)
+                .filter(u -> u.getRole() == Role.ADMIN)
+                .filter(u -> u.getPasswordHash() != null
+                        && encoder.matches(body.password(), u.getPasswordHash()))
+                .orElseThrow(InvalidCredentialsException::new);
+        return noContentWithCookie(jwt.issue(admin.getId(), admin.getRole()), COOKIE_TTL);
     }
 
     @PostMapping("/logout")

@@ -1,5 +1,6 @@
 package com.batowka.guestbooking.common;
 
+import com.batowka.guestbooking.auth.InvalidCredentialsException;
 import com.batowka.guestbooking.auth.InvalidPhoneException;
 import com.batowka.guestbooking.auth.UnknownPhoneException;
 import com.batowka.guestbooking.calendar.InvalidCalendarRangeException;
@@ -39,6 +40,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiError unknownPhone(UnknownPhoneException ex) {
         return new ApiError("UNKNOWN_PHONE", ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ApiError invalidCredentials(InvalidCredentialsException ex) {
+        return new ApiError("INVALID_CREDENTIALS", ex.getMessage());
     }
 
     @ExceptionHandler(InvalidPhoneException.class)
