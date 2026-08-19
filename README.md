@@ -12,7 +12,7 @@
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d   # Postgres + Kafka
-cd backend-api && ./gradlew bootRun
+cd backend-api && ./mvnw spring-boot:run
 ```
 
 Дизайн: `docs/specs/2026-08-13-japan-guest-booking-design.md`
