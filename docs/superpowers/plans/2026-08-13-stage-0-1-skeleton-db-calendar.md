@@ -6,13 +6,13 @@
 
 **Architecture:** Монорепо с тремя сервисами; в этом плане строится только backend-api (Spring Boot + PostgreSQL + Flyway) и инфраструктура вокруг (docker-compose.dev, GitHub Actions). Kafka поднимается в dev-compose уже сейчас, но код её не использует до плана №2.
 
-**Tech Stack:** Java 21, Spring Boot 3.5.x (Gradle Kotlin DSL), PostgreSQL 16, Flyway, Testcontainers, GitHub Actions.
+**Tech Stack:** Java 21, Spring Boot 4.0.x, Maven, PostgreSQL 16, Flyway, Testcontainers, GitHub Actions. (Tasks 3–7 исторически выполнены под Gradle Kotlin DSL; решение пользователя от 2026-08-19 — миграция на Maven перед Task 8, см. Global Constraints.)
 
 **Spec:** `docs/specs/2026-08-13-japan-guest-booking-design.md`
 
 ## Global Constraints
 
-- Java 21, Spring Boot 3.5.x, Gradle (wrapper коммитится в репо).
+- Java 21, Spring Boot 4.0.x (4.0.7 на момент решения; 3.5.x снят с поддержки и недоступен на start.spring.io — решение от 2026-08-14), Maven (wrapper `mvnw` коммитится в репо; решение от 2026-08-19: миграция с Gradle — пользователь выбрал Maven как более востребованный на рынке; выполнена отдельной миграционной задачей между Task 7 и Task 8).
 - PostgreSQL 16; миграции только через Flyway, `ddl-auto: validate`.
 - Все даты — календарные дни (JST), бронь = полуинтервал `[check_in, check_out)`; блокировки админа — включительно `[start_date, end_date]`.
 - Формат ошибок API единый: `{"code": "...", "message": "..."}`.
@@ -179,7 +179,7 @@ git commit -m "chore: dev-окружение — Postgres и Kafka в Docker Com
 ```bash
 mkdir backend-api && curl https://start.spring.io/starter.tgz \
   -d type=gradle-project-kotlin -d language=java -d javaVersion=21 \
-  -d bootVersion=3.5.4 -d groupId=com.batowka -d artifactId=backend-api \
+  -d bootVersion=4.0.7 -d groupId=com.batowka -d artifactId=backend-api \
   -d name=GuestBooking -d packageName=com.batowka.guestbooking \
   -d dependencies=web,data-jpa,validation,flyway,postgresql,testcontainers,lombok \
   | tar -xzv -C backend-api
@@ -1236,7 +1236,7 @@ git commit -m "feat: публичный GET /api/calendar и единый фор
 - Create: `.github/workflows/ci.yml`
 
 **Interfaces:**
-- Consumes: gradle-тесты из Task 3–7 (Testcontainers работает на ubuntu-latest — Docker там есть).
+- Consumes: maven-тесты из Task 3–7 (Testcontainers работает на ubuntu-latest — Docker там есть).
 - Produces: workflow `CI` с джобой `backend`; джобы `frontend` и `bot` добавят планы соответствующих этапов.
 
 - [ ] **Step 1: Создать workflow**
@@ -1261,8 +1261,8 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew test
+          cache: maven
+      - run: ./mvnw test
 ```
 
 - [ ] **Step 2: Commit и проверка**
@@ -1302,7 +1302,7 @@ git commit -m "ci: тесты backend-api на каждый push и PR"
    (INTERNAL/CONTROLLER/EXTERNAL), почему advertised.listeners для
    localhost и для docker-сети разные, что делает controller quorum.
 4. Анатомия GitHub Actions: события `push`/`pull_request`, jobs, steps,
-   готовые actions (`actions/checkout`, `setup-java`, `setup-gradle`);
+   готовые actions (`actions/checkout`, `setup-java` с кэшем Maven);
    почему Testcontainers работает в CI (Docker на раннере).
 
 - [ ] **Step 2: Написать разбор этапа 1**

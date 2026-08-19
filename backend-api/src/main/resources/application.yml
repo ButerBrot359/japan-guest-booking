@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/guestbooking
+    username: dev
+    password: dev
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false

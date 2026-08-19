@@ -1,0 +1,21 @@
+# Java / Maven
+backend-api/target/
+*.log
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Go
+bot-service/bin/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Секреты
+.env
+
+# SDD workspace
+.superpowers/
