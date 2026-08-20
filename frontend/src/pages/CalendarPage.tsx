@@ -21,14 +21,17 @@ type Flow =
   | { kind: 'confirm-cancel' }
 
 export function CalendarPage() {
-  const [monthStart, setMonthStart] = useState(todayIso().slice(0, 7) + '-01')
+  const yearFrom = todayIso().slice(0, 7) + '-01'
+  const yearTo = addMonths(yearFrom, 12)
+  const mobileShiftMax = addMonths(yearFrom, 10)
+  const [monthStart, setMonthStart] = useState(yearFrom)
   const [selection, setSelection] = useState<Selection>({ checkIn: null, checkOut: null })
   const [flow, setFlow] = useState<Flow>({ kind: 'idle' })
   const location = useLocation()
   const navigate = useNavigate()
 
   const me = useMe()
-  const calendar = useCalendar(monthStart, addMonths(monthStart, 2))
+  const calendar = useCalendar(yearFrom, yearTo)
   const create = useCreateBooking()
   const reschedule = useRescheduleBooking()
   const cancel = useCancelBooking()
@@ -38,9 +41,20 @@ export function CalendarPage() {
   const active = me.data?.activeBooking ?? null
   const bothPicked = selection.checkIn != null && selection.checkOut != null
 
+  const desktopMonths = Array.from({ length: 12 }, (_, i) => addMonths(yearFrom, i))
+  const mobileMonths = [monthStart, addMonths(monthStart, 1)]
+
+  const shiftMonth = (delta: 1 | -1) =>
+    setMonthStart((m) => {
+      const next = addMonths(m, delta)
+      if (next < yearFrom) return yearFrom
+      if (next > mobileShiftMax) return mobileShiftMax
+      return next
+    })
+
   const checkoutCandidates = (() => {
     if (!selection.checkIn || selection.checkOut) return undefined
-    for (const iso of isoRange(selection.checkIn, addMonths(monthStart, 2))) {
+    for (const iso of isoRange(selection.checkIn, yearTo)) {
       if (iso > selection.checkIn && (days.get(iso)?.status ?? 'FREE') !== 'FREE') return new Set([iso])
     }
     return undefined
@@ -93,40 +107,62 @@ export function CalendarPage() {
   const sheetErrorCode = sheetError instanceof ApiError ? sheetError.code : null
 
   return (
-    <div className="mx-auto max-w-md min-h-screen bg-paper px-4 py-5 pb-40">
-      <Header me={me.data ?? null} />
+    <div className={[
+      'mx-auto max-w-md min-h-dvh bg-paper px-4 py-5',
+      'lg:max-w-[90rem] lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-10 lg:px-10',
+      bothPicked ? 'pb-40' : 'pb-8',
+    ].join(' ')}>
+      <div className="lg:col-span-2">
+        <Header me={me.data ?? null} />
+      </div>
 
-      {me.data == null && !me.isLoading && <LoginCard />}
-      {me.data != null && (
-        <ProfileCard
-          me={me.data}
-          onReschedule={() => switchFlow({ kind: 'selecting-reschedule' })}
-          onCancel={() => {
-            // открываем диалог отмены заново — прошлая ошибка неактуальна
-            cancel.reset()
-            setFlow({ kind: 'confirm-cancel' })
-          }}
-          onEnterCode={() => active && setFlow({ kind: 'otp', bookingId: active.id, subtitle: `заезд ${isoToRu(active.checkIn)} → выезд ${isoToRu(active.checkOut)}`, cancelable: true })}
-          onCancelPending={() => cancelPending.mutate()}
-        />
-      )}
+      <div className="lg:order-2 lg:sticky lg:top-6 lg:self-start">
+        {me.data == null && !me.isLoading && <LoginCard />}
+        {me.data != null && (
+          <ProfileCard
+            me={me.data}
+            onReschedule={() => switchFlow({ kind: 'selecting-reschedule' })}
+            onCancel={() => {
+              // открываем диалог отмены заново — прошлая ошибка неактуальна
+              cancel.reset()
+              setFlow({ kind: 'confirm-cancel' })
+            }}
+            onEnterCode={() => active && setFlow({ kind: 'otp', bookingId: active.id, subtitle: `заезд ${isoToRu(active.checkIn)} → выезд ${isoToRu(active.checkOut)}`, cancelable: true })}
+            onCancelPending={() => cancelPending.mutate()}
+          />
+        )}
+      </div>
 
-      {flow.kind === 'selecting-reschedule' && (
-        <p className="mb-2 rounded-lg bg-card p-2 text-xs text-muted">
-          Перенос: выбери новые даты в календаре.{' '}
-          <button type="button" className="text-hanko" onClick={() => switchFlow({ kind: 'idle' })}>Передумал</button>
-        </p>
-      )}
+      <div>
+        {flow.kind === 'selecting-reschedule' && (
+          <p className="mb-2 rounded-lg bg-card p-2 text-xs text-muted">
+            Перенос: выбери новые даты в календаре.{' '}
+            <button type="button" className="text-hanko" onClick={() => switchFlow({ kind: 'idle' })}>Передумал</button>
+          </p>
+        )}
 
-      <Calendar
-        monthStart={monthStart}
-        days={days}
-        selection={selection}
-        selectable={me.data != null}
-        checkoutCandidates={checkoutCandidates}
-        onShiftMonth={(d) => setMonthStart((m) => addMonths(m, d))}
-        onPick={(iso) => setSelection((s) => pickDay(s, iso, days))}
-      />
+        <div className="lg:hidden">
+          <Calendar
+            months={mobileMonths}
+            days={days}
+            selection={selection}
+            selectable={me.data != null}
+            checkoutCandidates={checkoutCandidates}
+            onShiftMonth={shiftMonth}
+            onPick={(iso) => setSelection((s) => pickDay(s, iso, days))}
+          />
+        </div>
+        <div className="hidden lg:block">
+          <Calendar
+            months={desktopMonths}
+            days={days}
+            selection={selection}
+            selectable={me.data != null}
+            checkoutCandidates={checkoutCandidates}
+            onPick={(iso) => setSelection((s) => pickDay(s, iso, days))}
+          />
+        </div>
+      </div>
 
       {bothPicked && me.data != null && (flow.kind === 'idle' || flow.kind === 'selecting-reschedule') && (
         <BookingSheet

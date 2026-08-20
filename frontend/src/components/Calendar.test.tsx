@@ -16,7 +16,7 @@ function yesterdayOf(iso: string): string {
 }
 
 const base = {
-  monthStart: '2026-09-01',
+  months: ['2026-09-01', '2026-10-01'],
   selection: { checkIn: null, checkOut: null },
   selectable: true,
   onShiftMonth: vi.fn(),
@@ -66,7 +66,7 @@ test('прошедший день недоступен для выбора, да
   const yesterday = yesterdayOf(todayIso())
   const monthStart = yesterday.slice(0, 7) + '-01'
   const dayNum = String(Number(yesterday.slice(8)))
-  render(<Calendar {...base} monthStart={monthStart} onPick={vi.fn()} days={daysMap([])} />)
+  render(<Calendar {...base} months={[monthStart]} onPick={vi.fn()} days={daysMap([])} />)
   const target = screen.getAllByRole('button', { name: /свободно/ })
     .find((b) => b.textContent === dayNum)
   expect(target).toBeDisabled()

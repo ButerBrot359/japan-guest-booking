@@ -10,15 +10,26 @@ export interface MockState {
 
 export const mockState: MockState = { me: null, days: [], history: [], comment: null }
 
+/** Запросы к /api/calendar, зафиксированные для проверки диапазона дат в тестах. */
+export const capturedCalendarRequests: { from: string; to: string }[] = []
+
 export function resetMockState() {
   mockState.me = null
   mockState.days = []
   mockState.history = []
   mockState.comment = null
+  capturedCalendarRequests.length = 0
 }
 
 export const handlers = [
-  http.get('/api/calendar', () => HttpResponse.json({ days: mockState.days })),
+  http.get('/api/calendar', ({ request }) => {
+    const url = new URL(request.url)
+    capturedCalendarRequests.push({
+      from: url.searchParams.get('from') ?? '',
+      to: url.searchParams.get('to') ?? '',
+    })
+    return HttpResponse.json({ days: mockState.days })
+  }),
   http.post('/api/auth/login', async ({ request }) => {
     const { phone } = (await request.json()) as { phone: string }
     mockState.me = {
