@@ -6,6 +6,7 @@ import com.batowka.guestbooking.messaging.OutboxWriter;
 import com.batowka.guestbooking.user.AlreadyMemberException;
 import com.batowka.guestbooking.user.UserAccountRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,7 +35,14 @@ public class AccessRequestService {
         r.setPhone(phone);
         r.setName(name);
         r.setMessage(message);
-        requests.save(r);
+        try {
+            requests.saveAndFlush(r);
+        } catch (DataIntegrityViolationException e) {
+            // проиграли гонку с параллельным POST на тот же телефон (частичный уникальный
+            // индекс на PENDING) — проигравший гонку получает тот же идемпотентный успех,
+            // что и повтор; событие уже отправил победитель, второй раз слать не нужно
+            return;
+        }
         // уведомление админу той же транзакцией; без привязанного TG — просто некому слать
         jdbc.query("""
                 select telegram_chat_id from users

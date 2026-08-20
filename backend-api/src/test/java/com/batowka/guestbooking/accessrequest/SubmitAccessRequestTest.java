@@ -4,10 +4,12 @@ import com.batowka.guestbooking.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -67,6 +69,20 @@ class SubmitAccessRequestTest extends AbstractIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "select count(*) from outbox where event_type = 'ACCESS_REQUEST_RECEIVED'",
                 Integer.class)).isZero();
+    }
+
+    @Test
+    void secondPendingWithSameNumberViolatesUniqueIndex() {
+        // прямая проверка констрейнта из V4: TOCTOU-гонка двух POST закрывается на уровне БД,
+        // не только чтением в сервисе (см. try/catch вокруг saveAndFlush)
+        jdbc.update("""
+                insert into access_requests(phone, name, status) values (?, ?, 'PENDING')
+                """, "+81313300003", "Первый");
+
+        assertThatThrownBy(() -> jdbc.update("""
+                insert into access_requests(phone, name, status) values (?, ?, 'PENDING')
+                """, "+81313300003", "Второй"))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
