@@ -17,8 +17,9 @@ import { pickDay } from '../lib/selection'
 type Flow =
   | { kind: 'idle' }
   | { kind: 'selecting-reschedule' }
-  | { kind: 'otp'; bookingId: number; subtitle: string; cancelable: boolean }
+  | { kind: 'otp'; bookingId: number; subtitle: string; cancelable: boolean; celebrate: boolean; checkIn: string; checkOut: string }
   | { kind: 'confirm-cancel' }
+  | { kind: 'celebrate'; checkIn: string; checkOut: string }
 
 export function CalendarPage() {
   const yearFrom = todayIso().slice(0, 7) + '-01'
@@ -124,8 +125,10 @@ export function CalendarPage() {
         { bookingId: active.id, checkIn: selection.checkIn, checkOut: selection.checkOut },
         {
           onSuccess: () => {
+            const checkIn = selection.checkIn!
+            const checkOut = selection.checkOut!
             resetSelection()
-            setFlow({ kind: 'otp', bookingId: active.id, subtitle: `перенос на ${isoToRu(selection.checkIn!)} → ${isoToRu(selection.checkOut!)}`, cancelable: false })
+            setFlow({ kind: 'otp', bookingId: active.id, subtitle: `перенос на ${isoToRu(checkIn)} → ${isoToRu(checkOut)}`, cancelable: false, celebrate: true, checkIn, checkOut })
           },
         },
       )
@@ -134,8 +137,10 @@ export function CalendarPage() {
         { checkIn: selection.checkIn, checkOut: selection.checkOut, comment: comment || undefined },
         {
           onSuccess: (r) => {
+            const checkIn = selection.checkIn!
+            const checkOut = selection.checkOut!
             resetSelection()
-            setFlow({ kind: 'otp', bookingId: r.bookingId, subtitle: `заезд ${isoToRu(selection.checkIn!)} → выезд ${isoToRu(selection.checkOut!)}`, cancelable: true })
+            setFlow({ kind: 'otp', bookingId: r.bookingId, subtitle: `заезд ${isoToRu(checkIn)} → выезд ${isoToRu(checkOut)}`, cancelable: true, celebrate: true, checkIn, checkOut })
           },
         },
       )
@@ -165,7 +170,7 @@ export function CalendarPage() {
               cancel.reset()
               setFlow({ kind: 'confirm-cancel' })
             }}
-            onEnterCode={() => active && setFlow({ kind: 'otp', bookingId: active.id, subtitle: `заезд ${isoToRu(active.checkIn)} → выезд ${isoToRu(active.checkOut)}`, cancelable: true })}
+            onEnterCode={() => active && setFlow({ kind: 'otp', bookingId: active.id, subtitle: `заезд ${isoToRu(active.checkIn)} → выезд ${isoToRu(active.checkOut)}`, cancelable: true, celebrate: true, checkIn: active.checkIn, checkOut: active.checkOut })}
             onCancelPending={() => cancelPending.mutate()}
           />
         )}
@@ -236,7 +241,7 @@ export function CalendarPage() {
               <button type="button" className="flex-1 rounded-lg bg-hanko py-2 text-paper disabled:opacity-50"
                 disabled={cancel.isPending}
                 onClick={() => cancel.mutate(active.id, {
-                  onSuccess: () => setFlow({ kind: 'otp', bookingId: active.id, subtitle: 'отмена брони', cancelable: false }),
+                  onSuccess: () => setFlow({ kind: 'otp', bookingId: active.id, subtitle: 'отмена брони', cancelable: false, celebrate: false, checkIn: active.checkIn, checkOut: active.checkOut }),
                 })}>
                 Да, отменить
               </button>
@@ -253,9 +258,27 @@ export function CalendarPage() {
           bookingId={flow.bookingId}
           subtitle={flow.subtitle}
           showCancelPending={flow.cancelable}
-          onDone={() => setFlow({ kind: 'idle' })}
+          onDone={() => (flow.celebrate
+            ? setFlow({ kind: 'celebrate', checkIn: flow.checkIn, checkOut: flow.checkOut })
+            : setFlow({ kind: 'idle' }))}
           onClose={() => setFlow({ kind: 'idle' })}
         />
+      )}
+
+      {flow.kind === 'celebrate' && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-ink/25 p-6">
+          <div className="w-full max-w-xs rounded-2xl bg-paper p-4 text-sm shadow-xl">
+            <p className="mb-2 text-center font-display text-base">Мы очень вас ждём!</p>
+            <p className="mb-3 text-center text-muted">{isoToRu(flow.checkIn)} → {isoToRu(flow.checkOut)}</p>
+            <p className="mb-3 text-xs text-muted">
+              Ближе к дате мы свяжемся с вами, чтобы уточнить детали поездки.
+            </p>
+            <button type="button" className="w-full rounded-xl bg-ink py-2 text-sm text-paper"
+              onClick={() => setFlow({ kind: 'idle' })}>
+              Хорошо
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

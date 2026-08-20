@@ -18,7 +18,7 @@ test('показывает даты дд/мм/гггг и ночи', () => {
 test('отправляет комментарий', async () => {
   const onSubmit = vi.fn()
   render(<BookingSheet {...base} onSubmit={onSubmit} />)
-  await userEvent.type(screen.getByPlaceholderText(/Комментарий/), 'приеду с женой')
+  await userEvent.type(screen.getByPlaceholderText(/кто приедет с вами/), 'приеду с женой')
   await userEvent.click(screen.getByRole('button', { name: 'Забронировать' }))
   expect(onSubmit).toHaveBeenCalledWith('приеду с женой')
 })

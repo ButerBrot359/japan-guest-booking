@@ -35,7 +35,7 @@ export function BookingSheet({ selection, willReplace, onSubmit, onDismiss, pend
       )}
       <input
         className="w-full rounded-xl border border-muted/40 bg-paper p-2 text-sm"
-        placeholder="Комментарий (необязательно)"
+        placeholder="Если едете не одни — напишите, кто приедет с вами"
         maxLength={500}
         value={comment}
         onChange={(e) => setComment(e.target.value)}

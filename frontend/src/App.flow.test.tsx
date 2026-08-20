@@ -72,10 +72,13 @@ test('полный create-флоу: выбор дат → шторка → OTP �
   await userEvent.type(await screen.findByLabelText('Код из Telegram'), '471523')
   await userEvent.click(screen.getByRole('button', { name: 'Подтвердить' }))
 
+  expect(await screen.findByText(/мы очень вас ждём/i)).toBeInTheDocument()
+  expect(screen.getByText(/свяжемся с вами/i)).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Хорошо' }))
   expect(await screen.findByText('подтверждена')).toBeInTheDocument()
 })
 
-test('отмена CONFIRMED: диалог → OTP без «Отменить бронь»', async () => {
+test('отмена CONFIRMED: диалог → OTP без «Отменить бронь», без тёплого экрана', async () => {
   seedFreeSeptember()
   loginAs({ activeBooking: { id: 7, checkIn: '2026-09-10', checkOut: '2026-09-13', status: 'CONFIRMED' } })
   renderApp()
@@ -83,6 +86,11 @@ test('отмена CONFIRMED: диалог → OTP без «Отменить б�
   await userEvent.click(await screen.findByRole('button', { name: 'Да, отменить' }))
   await screen.findByLabelText('Код из Telegram')
   expect(screen.queryByRole('button', { name: 'Отменить бронь' })).not.toBeInTheDocument()
+
+  await userEvent.type(screen.getByLabelText('Код из Telegram'), '471523')
+  await userEvent.click(screen.getByRole('button', { name: 'Подтвердить' }))
+  await waitFor(() => expect(screen.queryByLabelText('Код из Telegram')).not.toBeInTheDocument())
+  expect(screen.queryByText(/мы очень вас ждём/i)).not.toBeInTheDocument()
 })
 
 test('перенос: режим выбора новых дат с подсказкой', async () => {
@@ -93,7 +101,7 @@ test('перенос: режим выбора новых дат с подска�
   expect(await screen.findByText(/выбери новые даты/)).toBeInTheDocument()
 })
 
-test('полный reschedule-флоу: перенос → новые даты → OTP с «перенос» в подзаголовке → модалка закрывается', async () => {
+test('полный reschedule-флоу: перенос → новые даты → OTP с «перенос» в подзаголовке → тёплый экран → подтверждена', async () => {
   seedFreeSeptember()
   loginAs({ activeBooking: { id: 7, checkIn: '2026-09-10', checkOut: '2026-09-13', status: 'CONFIRMED' } })
   renderApp()
@@ -106,7 +114,10 @@ test('полный reschedule-флоу: перенос → новые даты �
   await userEvent.type(await screen.findByLabelText('Код из Telegram'), '471523')
   await userEvent.click(screen.getByRole('button', { name: 'Подтвердить' }))
 
+  expect(await screen.findByText(/мы очень вас ждём/i)).toBeInTheDocument()
   await waitFor(() => expect(screen.queryByLabelText('Код из Telegram')).not.toBeInTheDocument())
+  await userEvent.click(screen.getByRole('button', { name: 'Хорошо' }))
+  expect(await screen.findByText('подтверждена')).toBeInTheDocument()
 })
 
 test('аноним кликает дату → модалка логина → после входа дата уже выбрана', async () => {
