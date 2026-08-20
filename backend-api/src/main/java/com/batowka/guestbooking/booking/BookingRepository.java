@@ -26,4 +26,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
                                   @Param("statuses") Collection<BookingStatus> statuses);
 
     Optional<Booking> findFirstByUserIdAndStatusOrderByIdDesc(Long userId, BookingStatus status);
+
+    /** Все брони с данными гостя — для админ-списка. */
+    @Query("select b from Booking b join fetch b.user order by b.checkIn desc")
+    List<Booking> findAllWithUser();
 }
