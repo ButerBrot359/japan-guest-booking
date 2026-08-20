@@ -50,6 +50,17 @@ class AdminUserTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void deleteRevokesTelegramLink() throws Exception {
+        Long id = jdbc.queryForObject(
+                "insert into users(phone, name, telegram_chat_id) values ('+81311100005', 'Со связкой', 779599) returning id",
+                Long.class);
+        mvc.perform(delete("/api/admin/users/" + id).cookie(adminAuth()))
+                .andExpect(status().isNoContent());
+        assertThat(jdbc.queryForObject(
+                "select telegram_chat_id is null from users where id = " + id, Boolean.class)).isTrue();
+    }
+
+    @Test
     void duplicateLivePhoneGives409() throws Exception {
         jdbc.update("insert into users(phone, name) values ('+81311100002', 'Есть')");
         mvc.perform(post("/api/admin/users").cookie(adminAuth()).contentType(APPLICATION_JSON)

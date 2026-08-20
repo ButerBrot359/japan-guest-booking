@@ -71,6 +71,8 @@ public class WhitelistService {
             throw new ActiveBookingExistsException();
         }
         user.setDeletedAt(clock.instant());
+        // доступ отозван — отзываем и Telegram-связку; при реактивации человек заново делится контактом с ботом
+        user.setTelegramChatId(null);
         users.save(user);
     }
 }
