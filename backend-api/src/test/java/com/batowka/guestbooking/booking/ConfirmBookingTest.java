@@ -40,7 +40,7 @@ class ConfirmBookingTest extends AbstractIntegrationTest {
         var result = mvc.perform(post("/api/bookings").cookie(auth(userId))
                         .contentType(APPLICATION_JSON)
                         .content("{\"checkIn\": \"%s\", \"checkOut\": \"%s\"}".formatted(in, out)))
-                .andExpect(status().isOk()).andReturn();
+                .andExpect(status().isCreated()).andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString())
                 .get("bookingId").asLong();
     }

@@ -47,10 +47,17 @@ public class BookingService {
         UserAccount user = requireTelegramLinked(userId);
         validateDates(checkIn, checkOut);
         // пересечение с СОБСТВЕННОЙ активной бронью — подсказываем перенос
-        boolean overlapsOwn = bookings
+        List<Booking> own = bookings
                 .findOverlapping(checkIn, checkOut.minusDays(1), ACTIVE).stream()
-                .anyMatch(b -> b.getUser().getId().equals(userId));
-        if (overlapsOwn) {
+                .filter(b -> b.getUser().getId().equals(userId))
+                .toList();
+        if (!own.isEmpty()) {
+            boolean pending = own.stream()
+                    .anyMatch(b -> b.getStatus() == BookingStatus.PENDING_OTP);
+            if (pending) {
+                throw new OverlapsOwnBookingException(
+                        "Эти даты держит ваша неподтверждённая бронь — подтвердите её кодом или отмените");
+            }
             throw new OverlapsOwnBookingException();
         }
         datesLock.acquire();
@@ -246,7 +253,34 @@ public class BookingService {
     public void resendCode(Long userId, long bookingId) {
         UserAccount user = requireTelegramLinked(userId);
         requireOwnership(bookingId, userId);
+        requireNotCancelled(bookingId);
         otp.resend(user, bookingId);
+    }
+
+    private void requireNotCancelled(long bookingId) {
+        String status;
+        try {
+            status = jdbc.queryForObject(
+                    "select status from bookings where id = ?", String.class, bookingId);
+        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+            throw new BookingNotFoundException();
+        }
+        if ("CANCELLED".equals(status)) {
+            throw new BookingExpiredException();
+        }
+    }
+
+    /** Явная отмена своей неподтверждённой брони: даты свободны сразу, чистильщика не ждём. */
+    @Transactional
+    public void cancelPending(Long userId) {
+        Booking pending = bookings
+                .findFirstByUserIdAndStatusOrderByIdDesc(userId, BookingStatus.PENDING_OTP)
+                .orElseThrow(BookingNotFoundException::new);
+        jdbc.update("""
+                update bookings set status = 'CANCELLED', cancelled_by = 'GUEST'
+                where id = ? and status = 'PENDING_OTP'
+                """, pending.getId());
+        otp.expireActive(userId);
     }
 
     /** Активная бронь для /api/me: CONFIRMED, иначе свежайшая PENDING_OTP. */
