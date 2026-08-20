@@ -66,6 +66,21 @@ class ResolveAccessRequestTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void approveWhenPhoneAlreadyLiveDoesNotDuplicate() throws Exception {
+        // номер уже в базе живым юзером (например, добавлен вручную мимо заявки) —
+        // approve должен просто закрыть заявку, не трогая whitelist
+        jdbc.update("insert into users(phone, name) values ('+81314400007', 'Уже свой')");
+        long id = pendingRequest("+81314400007");
+        mvc.perform(post("/api/admin/access-requests/" + id + "/approve").cookie(adminAuth()))
+                .andExpect(status().isNoContent());
+        assertThat(jdbc.queryForObject(
+                "select status from access_requests where id = " + id, String.class))
+                .isEqualTo("APPROVED");
+        assertThat(jdbc.queryForObject(
+                "select count(*) from users where phone = '+81314400007'", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
     void rejectOnlyMarksRequest() throws Exception {
         long id = pendingRequest("+81314400003");
         mvc.perform(post("/api/admin/access-requests/" + id + "/reject").cookie(adminAuth()))

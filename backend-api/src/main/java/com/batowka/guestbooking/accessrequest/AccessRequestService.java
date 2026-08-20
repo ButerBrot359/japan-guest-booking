@@ -84,11 +84,15 @@ public class AccessRequestService {
     private AccessRequest resolve(long id, AccessRequestStatus target) {
         AccessRequest r = requests.findById(id)
                 .orElseThrow(AccessRequestNotFoundException::new);
-        if (r.getStatus() != AccessRequestStatus.PENDING) {
+        // смена статуса — только атомарным UPDATE с ожидаемым статусом:
+        // параллельный второй resolve получает updated == 0 и честный 409
+        int updated = jdbc.update("""
+                update access_requests set status = ?, resolved_at = ?
+                where id = ? and status = 'PENDING'
+                """, target.name(), java.sql.Timestamp.from(clock.instant()), id);
+        if (updated == 0) {
             throw new AlreadyResolvedException();
         }
-        r.setStatus(target);
-        r.setResolvedAt(clock.instant());
-        return requests.save(r);
+        return r;
     }
 }
