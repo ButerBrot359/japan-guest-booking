@@ -9,6 +9,11 @@ services:
       POSTGRES_PASSWORD: dev
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d guestbooking"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   kafka:
     image: apache/kafka:3.9.0
@@ -26,6 +31,40 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  # Контейнеры приложений — под профилем app: обычный `up -d` по-прежнему
+  # поднимает только инфру (для ./mvnw spring-boot:run и go run в разработке).
+  # Полный стек: docker compose -f docker-compose.dev.yml --profile app up --build
+  backend:
+    build: ./backend-api
+    profiles: ["app"]
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/guestbooking
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  bot:
+    build: ./bot-service
+    profiles: ["app"]
+    environment:
+      # перекрывает KAFKA_BROKERS из .env: внутри docker-сети брокер — kafka:19092
+      KAFKA_BROKERS: kafka:19092
+    env_file:
+      - ./.env   # BOT_TOKEN — локальный секрет, в git не попадает
+    depends_on:
+      kafka:
+        condition: service_healthy
 
 volumes:
   pgdata:
