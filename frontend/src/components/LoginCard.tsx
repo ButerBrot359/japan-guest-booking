@@ -27,7 +27,13 @@ export function LoginCard() {
           type="button"
           className="mt-2 w-full rounded-xl bg-ink py-2 text-sm text-paper disabled:opacity-50"
           disabled={login.isPending || !phone.trim()}
-          onClick={() => login.mutate(phone.trim())}
+          onClick={() => {
+            // новый вход — прошлая заявка неактуальна
+            request.reset()
+            setName('')
+            setMessage('')
+            login.mutate(phone.trim())
+          }}
         >
           Войти
         </button>

@@ -55,3 +55,24 @@ test('RATE_LIMITED показывает «подожди минуту»', async 
   await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
   expect(await screen.findByText(/подожди минуту/)).toBeInTheDocument()
 })
+
+test('повторный вход сбрасывает состояние прошлой заявки', async () => {
+  server.use(http.post('/api/auth/login', () =>
+    HttpResponse.json({ code: 'UNKNOWN_PHONE', message: '' }, { status: 401 })))
+  renderCard()
+
+  await userEvent.type(screen.getByPlaceholderText(/\+7/), '+79990001111')
+  await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
+  await userEvent.type(await screen.findByPlaceholderText(/зовут/), 'Незнакомец')
+  await userEvent.click(screen.getByRole('button', { name: 'Отправить заявку' }))
+  expect(await screen.findByText(/Заявка отправлена/)).toBeInTheDocument()
+
+  const phoneInput = screen.getByPlaceholderText(/\+7/)
+  await userEvent.clear(phoneInput)
+  await userEvent.type(phoneInput, '+79990002222')
+  await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
+
+  const nameInput = await screen.findByPlaceholderText(/зовут/)
+  expect(screen.queryByText(/Заявка отправлена/)).not.toBeInTheDocument()
+  expect(nameInput).toHaveValue('')
+})
