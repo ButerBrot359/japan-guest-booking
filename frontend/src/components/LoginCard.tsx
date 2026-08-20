@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { ApiError } from '../api/client'
 import { useAccessRequest, useLogin } from '../api/queries'
+import { formatPhone, phoneDigits, toApiPhone } from '../lib/phone'
 
 export function LoginCard() {
-  const [phone, setPhone] = useState('')
+  const [digits, setDigits] = useState('')
   const [name, setName] = useState('')
   const [message, setMessage] = useState('')
   const login = useLogin()
@@ -18,21 +19,23 @@ export function LoginCard() {
       <div className="rounded-2xl bg-card p-4">
         <div className="mb-2 text-sm">Вход для своих</div>
         <input
+          data-testid="phone-input"
           className="w-full rounded-xl border border-muted/40 bg-paper p-2 text-sm"
-          placeholder="+7 ___ ___ __ __"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          placeholder="+7 (___) ___-__-__"
+          inputMode="tel"
+          value={formatPhone(digits)}
+          onChange={(e) => setDigits(phoneDigits(e.target.value))}
         />
         <button
           type="button"
           className="mt-2 w-full rounded-xl bg-ink py-2 text-sm text-paper disabled:opacity-50"
-          disabled={login.isPending || !phone.trim()}
+          disabled={login.isPending || digits.length !== 10}
           onClick={() => {
             // новый вход — прошлая заявка неактуальна
             request.reset()
             setName('')
             setMessage('')
-            login.mutate(phone.trim())
+            login.mutate(toApiPhone(digits))
           }}
         >
           Войти
@@ -69,7 +72,7 @@ export function LoginCard() {
                 type="button"
                 className="mt-2 w-full rounded-lg bg-hanko py-2 text-xs text-paper disabled:opacity-50"
                 disabled={request.isPending || !name.trim()}
-                onClick={() => request.mutate({ phone: phone.trim(), name: name.trim(), message: message.trim() || undefined })}
+                onClick={() => request.mutate({ phone: toApiPhone(digits), name: name.trim(), message: message.trim() || undefined })}
               >
                 Отправить заявку
               </button>
