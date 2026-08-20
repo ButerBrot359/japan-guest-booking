@@ -83,6 +83,16 @@ test('свой день зелёный и есть в легенде', () => {
   expect(screen.getByText('твоя')).toBeInTheDocument()
 })
 
+test('свой занятый день с именем (реальная форма CONFIRMED-брони) — disabled, без поповера', async () => {
+  const onPickBusy = vi.fn()
+  render(<Calendar {...base} onPickBusy={onPickBusy}
+    days={new Map([day('2026-09-10', { status: 'BOOKED', mine: true, guestName: 'Маша' })])} />)
+  const el = screen.getByRole('button', { name: /10 сентября/i })
+  expect(el).toBeDisabled()
+  await userEvent.click(el)
+  expect(onPickBusy).not.toHaveBeenCalled()
+})
+
 test('чужой занятый день с именем кликабелен и зовёт onPickBusy', async () => {
   const onPickBusy = vi.fn()
   render(<Calendar {...base} onPickBusy={onPickBusy}
