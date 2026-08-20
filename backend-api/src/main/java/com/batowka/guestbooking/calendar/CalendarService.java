@@ -3,6 +3,7 @@ package com.batowka.guestbooking.calendar;
 import com.batowka.guestbooking.booking.Booking;
 import com.batowka.guestbooking.booking.BookingRepository;
 import com.batowka.guestbooking.booking.BookingStatus;
+import com.batowka.guestbooking.user.UserAccountRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,9 +24,10 @@ public class CalendarService {
 
     private final BookingRepository bookings;
     private final BlockedPeriodRepository blockedPeriods;
+    private final UserAccountRepository users;
 
     @Transactional(readOnly = true)
-    public List<CalendarDay> getCalendar(LocalDate from, LocalDate to) {
+    public List<CalendarDay> getCalendar(LocalDate from, LocalDate to, Long viewerId) {
         if (to.isBefore(from)) {
             throw new InvalidCalendarRangeException("Дата конца раньше даты начала");
         }
@@ -34,19 +36,27 @@ public class CalendarService {
                     "Диапазон больше " + MAX_RANGE_DAYS + " дней");
         }
 
+        // Живость зрителя (правило этапа 5): удалённый с валидной cookie — аноним.
+        if (viewerId != null && users.findById(viewerId)
+                .filter(u -> u.getDeletedAt() == null).isEmpty()) {
+            viewerId = null;
+        }
+        Long viewer = viewerId;
+
         Map<LocalDate, CalendarDay> days = new LinkedHashMap<>();
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
-            days.put(d, new CalendarDay(d, DayStatus.FREE, null));
+            days.put(d, new CalendarDay(d, DayStatus.FREE, null, false));
         }
 
         for (Booking b : bookings.findOverlapping(from, to, OCCUPYING_STATUSES)) {
-            String name = b.getStatus() == BookingStatus.CONFIRMED
+            boolean mine = viewer != null && viewer.equals(b.getUser().getId());
+            String name = (viewer != null && b.getStatus() == BookingStatus.CONFIRMED)
                     ? b.getUser().getName() : null;
             LocalDate start = b.getCheckIn().isBefore(from) ? from : b.getCheckIn();
             for (LocalDate d = start;
                  d.isBefore(b.getCheckOut()) && !d.isAfter(to);
                  d = d.plusDays(1)) {
-                days.put(d, new CalendarDay(d, DayStatus.BOOKED, name));
+                days.put(d, new CalendarDay(d, DayStatus.BOOKED, name, mine));
             }
         }
 
@@ -55,7 +65,7 @@ public class CalendarService {
             LocalDate start = p.getStartDate().isBefore(from) ? from : p.getStartDate();
             LocalDate end = p.getEndDate().isAfter(to) ? to : p.getEndDate();
             for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
-                days.put(d, new CalendarDay(d, DayStatus.BLOCKED, null));
+                days.put(d, new CalendarDay(d, DayStatus.BLOCKED, null, false));
             }
         }
 

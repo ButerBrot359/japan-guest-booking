@@ -22,7 +22,7 @@ class CalendarServiceTest extends AbstractIntegrationTest {
     @Autowired
     JdbcTemplate jdbc;
 
-    private void givenBooking(String phone, String name, String in, String out, String status) {
+    private Long givenBooking(String phone, String name, String in, String out, String status) {
         Long id = jdbc.queryForObject(
                 "insert into users(phone, name) values (?, ?) returning id",
                 Long.class, phone, name);
@@ -30,6 +30,15 @@ class CalendarServiceTest extends AbstractIntegrationTest {
                 insert into bookings(user_id, check_in, check_out, status)
                 values (?, ?::date, ?::date, ?)
                 """, id, in, out, status);
+        return id;
+    }
+
+    // отдельный «зритель» с живой сессией — чтобы проверять видимость имени
+    // для залогиненного пользователя, не совпадающего с владельцем брони.
+    private Long givenViewer(String phone) {
+        return jdbc.queryForObject(
+                "insert into users(phone, name) values (?, 'Зритель') returning id",
+                Long.class, phone);
     }
 
     private Map<LocalDate, CalendarDay> byDate(List<CalendarDay> days) {
@@ -39,13 +48,14 @@ class CalendarServiceTest extends AbstractIntegrationTest {
     @Test
     void freeBookedAndBlockedDaysAreMarked() {
         givenBooking("+81300000001", "Маша", "2026-10-10", "2026-10-12", "CONFIRMED");
+        Long viewer = givenViewer("+81300000099");
         jdbc.update("""
                 insert into blocked_periods(start_date, end_date, reason)
                 values ('2026-10-20', '2026-10-21', 'сами в отъезде')
                 """);
 
         List<CalendarDay> days = calendar.getCalendar(
-                LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-31"));
+                LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-31"), viewer);
 
         assertThat(days).hasSize(31);
         Map<LocalDate, CalendarDay> map = byDate(days);
@@ -65,9 +75,11 @@ class CalendarServiceTest extends AbstractIntegrationTest {
     @Test
     void pendingOtpBookingOccupiesDatesButHidesName() {
         givenBooking("+81300000002", "Петя", "2026-11-10", "2026-11-12", "PENDING_OTP");
+        Long viewer = givenViewer("+81300000098");
 
+        // даже залогиненному зрителю имя не показываем — бронь не подтверждена
         Map<LocalDate, CalendarDay> map = byDate(calendar.getCalendar(
-                LocalDate.parse("2026-11-01"), LocalDate.parse("2026-11-30")));
+                LocalDate.parse("2026-11-01"), LocalDate.parse("2026-11-30"), viewer));
 
         assertThat(map.get(LocalDate.parse("2026-11-10")).status()).isEqualTo(DayStatus.BOOKED);
         // имя показываем только для подтверждённых броней
@@ -79,7 +91,7 @@ class CalendarServiceTest extends AbstractIntegrationTest {
         givenBooking("+81300000003", "Ира", "2026-12-10", "2026-12-12", "CANCELLED");
 
         Map<LocalDate, CalendarDay> map = byDate(calendar.getCalendar(
-                LocalDate.parse("2026-12-01"), LocalDate.parse("2026-12-31")));
+                LocalDate.parse("2026-12-01"), LocalDate.parse("2026-12-31"), null));
 
         assertThat(map.get(LocalDate.parse("2026-12-10")).status()).isEqualTo(DayStatus.FREE);
     }
@@ -87,11 +99,11 @@ class CalendarServiceTest extends AbstractIntegrationTest {
     @Test
     void rejectsInvertedAndTooLongRanges() {
         assertThatThrownBy(() -> calendar.getCalendar(
-                LocalDate.parse("2026-10-31"), LocalDate.parse("2026-10-01")))
+                LocalDate.parse("2026-10-31"), LocalDate.parse("2026-10-01"), null))
                 .isInstanceOf(InvalidCalendarRangeException.class);
 
         assertThatThrownBy(() -> calendar.getCalendar(
-                LocalDate.parse("2026-01-01"), LocalDate.parse("2028-01-01")))
+                LocalDate.parse("2026-01-01"), LocalDate.parse("2028-01-01"), null))
                 .isInstanceOf(InvalidCalendarRangeException.class);
     }
 
@@ -104,7 +116,7 @@ class CalendarServiceTest extends AbstractIntegrationTest {
                 """);
 
         Map<LocalDate, CalendarDay> map = byDate(calendar.getCalendar(
-                LocalDate.parse("2027-04-01"), LocalDate.parse("2027-04-30")));
+                LocalDate.parse("2027-04-01"), LocalDate.parse("2027-04-30"), null));
 
         assertThat(map.get(LocalDate.parse("2027-04-11")).status()).isEqualTo(DayStatus.BOOKED);
         assertThat(map.get(LocalDate.parse("2027-04-12")).status()).isEqualTo(DayStatus.BLOCKED);

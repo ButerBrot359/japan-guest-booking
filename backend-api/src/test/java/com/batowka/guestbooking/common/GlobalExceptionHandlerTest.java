@@ -42,7 +42,7 @@ class GlobalExceptionHandlerTest extends AbstractIntegrationTest {
 
     @Test
     void unexpectedExceptionBecomes500WithoutLeakingDetails() throws Exception {
-        when(calendar.getCalendar(any(), any()))
+        when(calendar.getCalendar(any(), any(), any()))
                 .thenThrow(new IllegalStateException("секретная внутренняя деталь"));
 
         mvc.perform(get("/api/calendar").param("from", "2026-10-01").param("to", "2026-10-02"))

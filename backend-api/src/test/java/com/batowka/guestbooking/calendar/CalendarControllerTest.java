@@ -31,8 +31,8 @@ class CalendarControllerTest {
 
     @Test
     void returnsDays() throws Exception {
-        when(calendar.getCalendar(any(), any())).thenReturn(List.of(
-                new CalendarDay(LocalDate.parse("2026-10-10"), DayStatus.BOOKED, "Маша")));
+        when(calendar.getCalendar(any(), any(), any())).thenReturn(List.of(
+                new CalendarDay(LocalDate.parse("2026-10-10"), DayStatus.BOOKED, "Маша", false)));
 
         mvc.perform(get("/api/calendar")
                         .param("from", "2026-10-10")
@@ -45,7 +45,7 @@ class CalendarControllerTest {
 
     @Test
     void invalidRangeBecomes400WithErrorFormat() throws Exception {
-        when(calendar.getCalendar(any(), any()))
+        when(calendar.getCalendar(any(), any(), any()))
                 .thenThrow(new InvalidCalendarRangeException("Дата конца раньше даты начала"));
 
         mvc.perform(get("/api/calendar")
