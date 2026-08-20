@@ -59,15 +59,27 @@ class MeControllerTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void meCarriesGreeting() throws Exception {
-        // Task 4 вернёт случайное приветствие из user_greetings; пока — null-заглушка
+    void meCarriesGreetingFromSet() throws Exception {
         Long id = jdbc.queryForObject(
                 "insert into users(phone, name) values ('+81322200001', 'Маша') returning id",
+                Long.class);
+        jdbc.update("insert into user_greetings(user_id, text) values (?, 'С возвращением!')", id);
+
+        mvc.perform(get("/api/me")
+                        .cookie(new Cookie(JwtAuthFilter.COOKIE_NAME, jwt.issue(id, Role.FRIEND))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.greeting").value("С возвращением!"));
+    }
+
+    @Test
+    void meGreetingNullWhenSetEmpty() throws Exception {
+        Long id = jdbc.queryForObject(
+                "insert into users(phone, name) values ('+81322200002', 'Маша') returning id",
                 Long.class);
         mvc.perform(get("/api/me")
                         .cookie(new Cookie(JwtAuthFilter.COOKIE_NAME, jwt.issue(id, Role.FRIEND))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.greeting").doesNotExist());
+                .andExpect(jsonPath("$.greeting").isEmpty());
     }
 
     @Test

@@ -20,6 +20,7 @@ import java.util.Optional;
 public class WhitelistService {
 
     private final UserAccountRepository users;
+    private final UserGreetingRepository greetingRepo;
     private final JdbcTemplate jdbc;
     private final Clock clock;
 
@@ -74,5 +75,30 @@ public class WhitelistService {
         // доступ отозван — отзываем и Telegram-связку; при реактивации человек заново делится контактом с ботом
         user.setTelegramChatId(null);
         users.save(user);
+    }
+
+    /** Полная замена набора приветствий гостя; blank-строки отбрасываются. */
+    @Transactional
+    public void setGreetings(long id, List<String> greetings) {
+        UserAccount user = users.findById(id)
+                .filter(u -> u.getDeletedAt() == null)
+                .orElseThrow(UserNotFoundException::new);
+        greetingRepo.deleteByUserId(user.getId());
+        greetings.stream()
+                .filter(g -> g != null && !g.isBlank())
+                .map(String::trim)
+                .forEach(text -> {
+                    UserGreeting g = new UserGreeting();
+                    g.setUserId(user.getId());
+                    g.setText(text);
+                    greetingRepo.save(g);
+                });
+    }
+
+    /** Случайное приветствие из набора; выбор в БД — order by random(). */
+    public Optional<String> randomGreeting(Long userId) {
+        return jdbc.query(
+                "select text from user_greetings where user_id = ? order by random() limit 1",
+                (rs, i) -> rs.getString(1), userId).stream().findFirst();
     }
 }

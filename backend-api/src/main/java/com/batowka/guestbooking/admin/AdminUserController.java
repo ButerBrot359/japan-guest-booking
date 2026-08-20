@@ -3,6 +3,7 @@ package com.batowka.guestbooking.admin;
 import com.batowka.guestbooking.user.WhitelistService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,6 +23,9 @@ public class AdminUserController {
     public record AddRequest(@NotBlank String phone, @NotBlank @Size(max = 100) String name) {
     }
 
+    public record GreetingsRequest(@NotNull List<@Size(max = 300) String> greetings) {
+    }
+
     @GetMapping
     public List<WhitelistService.UserRow> list() {
         return whitelist.list();
@@ -37,5 +41,11 @@ public class AdminUserController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable long id) {
         whitelist.softDelete(id);
+    }
+
+    @PutMapping("/{id}/greetings")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void setGreetings(@PathVariable long id, @Valid @RequestBody GreetingsRequest body) {
+        whitelist.setGreetings(id, body.greetings());
     }
 }

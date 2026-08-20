@@ -7,6 +7,7 @@ import com.batowka.guestbooking.user.Role;
 import com.batowka.guestbooking.user.UserAccount;
 import com.batowka.guestbooking.user.UserAccountRepository;
 import com.batowka.guestbooking.user.UserGoneException;
+import com.batowka.guestbooking.user.WhitelistService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +21,7 @@ public class MeController {
 
     private final UserAccountRepository users;
     private final BookingService bookingService;
+    private final WhitelistService whitelist;
 
     public record ActiveBooking(long id, LocalDate checkIn, LocalDate checkOut, BookingStatus status) {
     }
@@ -38,6 +40,6 @@ public class MeController {
                 .map(b -> new ActiveBooking(b.getId(), b.getCheckIn(), b.getCheckOut(), b.getStatus()))
                 .orElse(null);
         return new MeResponse(user.getPhone(), user.getName(), user.getRole(),
-                user.getTelegramChatId() != null, null /* Task 4 вернёт случайное приветствие */, activeBooking);
+                user.getTelegramChatId() != null, whitelist.randomGreeting(userId).orElse(null), activeBooking);
     }
 }
