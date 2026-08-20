@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from './client'
-import type { CalendarResponse, CreateResult, Me } from './types'
+import type { CalendarResponse, CreateResult, Me, MyBookings } from './types'
 
 export function useCalendar(fromIso: string, toIso: string) {
   return useQuery({
@@ -95,5 +95,17 @@ export function useCancelPending() {
       qc.invalidateQueries({ queryKey: ['me'] })
       qc.invalidateQueries({ queryKey: ['calendar'] })
     },
+  })
+}
+
+export function useMyBookings() {
+  return useQuery({ queryKey: ['my-bookings'], queryFn: () => api.get<MyBookings>('/me/bookings') })
+}
+
+export function useUpdateComment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (comment: string | null) => api.patch<void>('/bookings/active', { comment }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-bookings'] }),
   })
 }

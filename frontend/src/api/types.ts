@@ -11,3 +11,6 @@ export interface Me {
 }
 export interface WillReplace { id: number; checkIn: string; checkOut: string }
 export interface CreateResult { bookingId: number; willReplaceBooking: WillReplace | null }
+export interface PastVisit { checkIn: string; checkOut: string; nights: number }
+export interface ActiveBookingDetails extends ActiveBooking { comment: string | null }
+export interface MyBookings { active: ActiveBookingDetails | null; history: PastVisit[] }

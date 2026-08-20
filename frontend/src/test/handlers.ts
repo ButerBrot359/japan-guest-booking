@@ -1,16 +1,20 @@
 import { http, HttpResponse } from 'msw'
-import type { CalendarDay, Me } from '../api/types'
+import type { CalendarDay, Me, PastVisit } from '../api/types'
 
 export interface MockState {
   me: Me | null
   days: CalendarDay[]
+  history: PastVisit[]
+  comment: string | null
 }
 
-export const mockState: MockState = { me: null, days: [] }
+export const mockState: MockState = { me: null, days: [], history: [], comment: null }
 
 export function resetMockState() {
   mockState.me = null
   mockState.days = []
+  mockState.history = []
+  mockState.comment = null
 }
 
 export const handlers = [
@@ -44,10 +48,25 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 })
   }),
   http.post('/api/bookings/:id/resend-code', () => new HttpResponse(null, { status: 204 })),
+  // конкретный путь /active — раньше динамического /:id, иначе тот перехватит первым
+  http.patch('/api/bookings/active', async ({ request }) => {
+    const { comment } = (await request.json()) as { comment: string | null }
+    mockState.comment = comment && comment.trim() !== '' ? comment.trim() : null
+    return new HttpResponse(null, { status: 204 })
+  }),
   http.patch('/api/bookings/:id', () => new HttpResponse(null, { status: 204 })),
   http.delete('/api/bookings/pending', () => {
     if (mockState.me) mockState.me.activeBooking = null
     return new HttpResponse(null, { status: 204 })
   }),
   http.delete('/api/bookings/:id', () => new HttpResponse(null, { status: 204 })),
+  http.get('/api/me/bookings', () =>
+    mockState.me
+      ? HttpResponse.json({
+          active: mockState.me.activeBooking
+            ? { ...mockState.me.activeBooking, comment: mockState.comment ?? null }
+            : null,
+          history: mockState.history,
+        })
+      : HttpResponse.json({ code: 'UNAUTHORIZED', message: 'Требуется вход' }, { status: 401 })),
 ]

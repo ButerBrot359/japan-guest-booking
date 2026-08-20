@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router'
 import { ApiError } from '../api/client'
 import {
   useCalendar, useCancelBooking, useCancelPending, useCreateBooking,
@@ -23,6 +24,8 @@ export function CalendarPage() {
   const [monthStart, setMonthStart] = useState(todayIso().slice(0, 7) + '-01')
   const [selection, setSelection] = useState<Selection>({ checkIn: null, checkOut: null })
   const [flow, setFlow] = useState<Flow>({ kind: 'idle' })
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const me = useMe()
   const calendar = useCalendar(monthStart, addMonths(monthStart, 2))
@@ -52,6 +55,14 @@ export function CalendarPage() {
     resetSelection()
     setFlow(next)
   }
+
+  useEffect(() => {
+    if ((location.state as { startReschedule?: boolean } | null)?.startReschedule) {
+      switchFlow({ kind: 'selecting-reschedule' })
+      navigate('.', { replace: true, state: null })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const submitBooking = (comment: string) => {
     if (!selection.checkIn || !selection.checkOut) return

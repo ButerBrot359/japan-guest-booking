@@ -1,19 +1,12 @@
 import { useState } from 'react'
 import type { ActiveBooking } from '../api/types'
-import { isoToRu, nightsBetween } from '../lib/dates'
+import { isoToRu, nightsBetween, nightsWord } from '../lib/dates'
 
 const ERROR_TEXTS: Record<string, string> = {
   DATES_TAKEN: 'Эти даты только что заняли — выбери другие.',
   OVERLAPS_OWN_BOOKING: 'Эти даты пересекаются с твоей текущей бронью.',
   TELEGRAM_NOT_LINKED: 'Сначала привяжи Telegram — напиши боту и поделись контактом.',
   VALIDATION_ERROR: 'Даты в прошлом или некорректны — выбери заново.',
-}
-
-function nightsWord(n: number): string {
-  const mod10 = n % 10, mod100 = n % 100
-  if (mod10 === 1 && mod100 !== 11) return `${n} ночь`
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} ночи`
-  return `${n} ночей`
 }
 
 interface BookingSheetProps {
