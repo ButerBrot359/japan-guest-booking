@@ -5,6 +5,7 @@ import com.batowka.guestbooking.auth.InvalidPhoneException;
 import com.batowka.guestbooking.auth.RateLimitExceededException;
 import com.batowka.guestbooking.auth.UnknownPhoneException;
 import com.batowka.guestbooking.booking.BookingExpiredException;
+import com.batowka.guestbooking.booking.BookingNotFoundException;
 import com.batowka.guestbooking.booking.DatesTakenException;
 import com.batowka.guestbooking.booking.InvalidBookingDatesException;
 import com.batowka.guestbooking.booking.NotYourBookingException;
@@ -16,7 +17,6 @@ import com.batowka.guestbooking.otp.InvalidCodeException;
 import com.batowka.guestbooking.otp.NoActiveCodeException;
 import com.batowka.guestbooking.otp.ResendTooSoonException;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -146,10 +146,10 @@ public class GlobalExceptionHandler {
         return new ApiError("VALIDATION_ERROR", ex.getMessage());
     }
 
-    @ExceptionHandler(EmptyResultDataAccessException.class)
+    @ExceptionHandler(BookingNotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ApiError notFound(EmptyResultDataAccessException ex) {
-        return new ApiError("NOT_FOUND", "Бронь не найдена");
+    public ApiError bookingNotFound(BookingNotFoundException ex) {
+        return new ApiError("NOT_FOUND", ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

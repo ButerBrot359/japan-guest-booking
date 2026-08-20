@@ -83,8 +83,13 @@ public class BookingService {
     }
 
     void requireOwnership(long bookingId, Long userId) {
-        Long ownerId = jdbc.queryForObject(
-                "select user_id from bookings where id = ?", Long.class, bookingId);
+        Long ownerId;
+        try {
+            ownerId = jdbc.queryForObject(
+                    "select user_id from bookings where id = ?", Long.class, bookingId);
+        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+            throw new BookingNotFoundException();
+        }
         if (ownerId == null || !ownerId.equals(userId)) {
             throw new NotYourBookingException();
         }
@@ -159,8 +164,13 @@ public class BookingService {
     }
 
     private void requireStatus(long bookingId, String expected) {
-        String status = jdbc.queryForObject(
-                "select status from bookings where id = ?", String.class, bookingId);
+        String status;
+        try {
+            status = jdbc.queryForObject(
+                    "select status from bookings where id = ?", String.class, bookingId);
+        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+            throw new BookingNotFoundException();
+        }
         if (!expected.equals(status)) {
             throw new BookingExpiredException();
         }
