@@ -90,6 +90,8 @@ export function CalendarPage() {
   }, [me.data, pendingDate])
 
   const handlePick = (iso: string) => {
+    // /api/me ещё грузится — не мигаем модалкой уже залогиненному, просто игнорируем клик
+    if (me.isLoading) return
     if (me.data == null) {
       setPendingDate(iso)
       setLoginOpen(true)
