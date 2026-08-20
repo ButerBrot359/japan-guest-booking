@@ -1,3 +1,4 @@
+import { http, HttpResponse } from 'msw'
 import type { CalendarDay, Me } from '../api/types'
 
 export interface MockState {
@@ -12,4 +13,6 @@ export function resetMockState() {
   mockState.days = []
 }
 
-export const handlers = [] as import('msw').RequestHandler[]
+export const handlers = [
+  http.get('/api/calendar', () => HttpResponse.json({ days: mockState.days })),
+]
