@@ -7,11 +7,13 @@ import com.batowka.guestbooking.otp.OtpService;
 import com.batowka.guestbooking.user.UserAccount;
 import com.batowka.guestbooking.user.UserAccountRepository;
 import com.batowka.guestbooking.user.UserGoneException;
-import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
@@ -22,7 +24,6 @@ import java.util.Map;
 import java.util.Optional;
 
 @Service
-@RequiredArgsConstructor
 public class BookingService {
 
     public static final ZoneId JST = ZoneId.of("Asia/Tokyo");
@@ -38,6 +39,21 @@ public class BookingService {
     private final OutboxWriter outbox;
     private final DatesLock datesLock;
     private final BlockedPeriodRepository blockedPeriods;
+    private final TransactionTemplate requiresNew;
+
+    public BookingService(BookingRepository bookings, UserAccountRepository users, OtpService otp,
+                          JdbcTemplate jdbc, OutboxWriter outbox, DatesLock datesLock,
+                          BlockedPeriodRepository blockedPeriods, PlatformTransactionManager txManager) {
+        this.bookings = bookings;
+        this.users = users;
+        this.otp = otp;
+        this.jdbc = jdbc;
+        this.outbox = outbox;
+        this.datesLock = datesLock;
+        this.blockedPeriods = blockedPeriods;
+        this.requiresNew = new TransactionTemplate(txManager);
+        this.requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
 
     public record WillReplace(long id, LocalDate checkIn, LocalDate checkOut) {
     }
@@ -164,6 +180,9 @@ public class BookingService {
     @Transactional
     public void requestReschedule(Long userId, long bookingId,
                                   LocalDate checkIn, LocalDate checkOut) {
+        // гость со вчерашней вкладкой не должен переписать даты уже состоявшейся
+        // поездки — сначала лениво завершаем прошедшую бронь (как в create/activeBooking)
+        completePastBooking(userId);
         UserAccount user = requireTelegramLinked(userId);
         requireOwnership(bookingId, userId);
         validateDates(checkIn, checkOut);
@@ -176,6 +195,8 @@ public class BookingService {
 
     @Transactional
     public void requestCancel(Long userId, long bookingId) {
+        // тот же лаг: не дать стереть отменой уже состоявшуюся поездку
+        completePastBooking(userId);
         UserAccount user = requireTelegramLinked(userId);
         requireOwnership(bookingId, userId);
         requireStatus(bookingId, "CONFIRMED");
@@ -309,11 +330,15 @@ public class BookingService {
     /**
      * Лениво завершает прошедшие поездки: CONFIRMED с выездом сегодня или раньше → COMPLETED.
      * Атомарный условный UPDATE (урок этапа 5) — без шедулера и без exists-then-update.
+     * REQUIRES_NEW: коммитится независимо от вызывающего метода — иначе, например,
+     * requestReschedule/requestCancel откатят завершение вместе с BookingExpiredException,
+     * и устаревший клиент не увидит честный COMPLETED в БД.
      */
     public void completePastBooking(Long userId) {
-        jdbc.update("update bookings set status = 'COMPLETED' "
+        requiresNew.executeWithoutResult(status -> jdbc.update(
+                "update bookings set status = 'COMPLETED' "
                         + "where user_id = ? and status = 'CONFIRMED' and check_out <= ?",
-                userId, LocalDate.now(JST));
+                userId, LocalDate.now(JST)));
     }
 
     /** Гость меняет комментарий своей активной брони; без OTP — поле не критичное. */
