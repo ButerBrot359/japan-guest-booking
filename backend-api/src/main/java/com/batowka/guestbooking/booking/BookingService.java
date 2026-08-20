@@ -16,6 +16,7 @@ import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,6 +28,8 @@ public class BookingService {
     public static final ZoneId JST = ZoneId.of("Asia/Tokyo");
     public static final List<BookingStatus> ACTIVE =
             List.of(BookingStatus.PENDING_OTP, BookingStatus.CONFIRMED);
+    /** Максимальная длина брони — «не больше 2 недель» (решение владельца, этап 6.5). */
+    public static final int MAX_NIGHTS = 14;
 
     private final BookingRepository bookings;
     private final UserAccountRepository users;
@@ -109,6 +112,9 @@ public class BookingService {
         if (checkIn == null || checkOut == null || !checkIn.isBefore(checkOut)
                 || checkIn.isBefore(LocalDate.now(JST))) {
             throw new InvalidBookingDatesException();
+        }
+        if (ChronoUnit.DAYS.between(checkIn, checkOut) > MAX_NIGHTS) {
+            throw new RangeTooLongException();
         }
     }
 

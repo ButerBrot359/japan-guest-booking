@@ -12,6 +12,7 @@ import com.batowka.guestbooking.booking.DatesTakenException;
 import com.batowka.guestbooking.booking.InvalidBookingDatesException;
 import com.batowka.guestbooking.booking.NotYourBookingException;
 import com.batowka.guestbooking.booking.OverlapsOwnBookingException;
+import com.batowka.guestbooking.booking.RangeTooLongException;
 import com.batowka.guestbooking.booking.TelegramNotLinkedException;
 import com.batowka.guestbooking.calendar.BlockedPeriodNotFoundException;
 import com.batowka.guestbooking.calendar.InvalidCalendarRangeException;
@@ -163,6 +164,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiError invalidBookingDates(InvalidBookingDatesException ex) {
         return new ApiError("VALIDATION_ERROR", ex.getMessage());
+    }
+
+    @ExceptionHandler(RangeTooLongException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError rangeTooLong(RangeTooLongException ex) {
+        return new ApiError("RANGE_TOO_LONG", ex.getMessage());
     }
 
     @ExceptionHandler(BookingNotFoundException.class)
