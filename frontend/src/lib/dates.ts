@@ -49,6 +49,10 @@ export function todayIso(): string {
   return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
 }
 
+export function addDays(iso: string, n: number): string {
+  return fromUtc(toUtc(iso) + n * DAY_MS)
+}
+
 export function isoRange(fromInclusive: string, toExclusive: string): string[] {
   const out: string[] = []
   for (let t = toUtc(fromInclusive); t < toUtc(toExclusive); t += DAY_MS) out.push(fromUtc(t))

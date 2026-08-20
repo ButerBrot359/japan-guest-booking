@@ -11,7 +11,7 @@ import { Header } from '../components/Header'
 import { LoginModal } from '../components/LoginModal'
 import { OtpModal } from '../components/OtpModal'
 import { ProfileCard } from '../components/ProfileCard'
-import { addMonths, isoRange, isoToRu, todayIso } from '../lib/dates'
+import { addDays, addMonths, isoRange, isoToRu, todayIso } from '../lib/dates'
 import { pickDay } from '../lib/selection'
 
 type Flow =
@@ -29,6 +29,7 @@ export function CalendarPage() {
   const [flow, setFlow] = useState<Flow>({ kind: 'idle' })
   const [pendingDate, setPendingDate] = useState<string | null>(null)
   const [loginOpen, setLoginOpen] = useState(false)
+  const [guestInfo, setGuestInfo] = useState<{ name: string; from: string; to: string } | null>(null)
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -61,6 +62,8 @@ export function CalendarPage() {
     }
     return undefined
   })()
+  // зеркалит бэкенд-лимит 14 ночей (RANGE_TOO_LONG) — пока выбирается выезд
+  const maxCheckout = selection.checkIn && !selection.checkOut ? addDays(selection.checkIn, 14) : undefined
 
   const resetSelection = () => setSelection({ checkIn: null, checkOut: null })
 
@@ -97,7 +100,21 @@ export function CalendarPage() {
       setLoginOpen(true)
       return
     }
+    setGuestInfo(null)
     setSelection((s) => pickDay(s, iso, days))
+  }
+
+  // клик по чужому занятому дню с известным именем — «кто гостит»:
+  // сканируем от кликнутого дня влево/вправо, пока имя совпадает; выезд — день
+  // после последнего занятого дня (полуинтервал)
+  const handlePickBusy = (iso: string) => {
+    const name = days.get(iso)?.guestName
+    if (!name) return
+    let from = iso
+    while (days.get(addDays(from, -1))?.guestName === name) from = addDays(from, -1)
+    let last = iso
+    while (days.get(addDays(last, 1))?.guestName === name) last = addDays(last, 1)
+    setGuestInfo({ name, from, to: addDays(last, 1) })
   }
 
   const submitBooking = (comment: string) => {
@@ -162,6 +179,13 @@ export function CalendarPage() {
           </p>
         )}
 
+        {guestInfo && (
+          <p className="mb-2 rounded-lg bg-card p-2 text-xs text-muted">
+            Гостит {guestInfo.name} · {isoToRu(guestInfo.from)} → {isoToRu(guestInfo.to)}{' '}
+            <button type="button" className="text-hanko" onClick={() => setGuestInfo(null)}>Закрыть</button>
+          </p>
+        )}
+
         <div className="lg:hidden">
           <Calendar
             months={mobileMonths}
@@ -169,8 +193,10 @@ export function CalendarPage() {
             selection={selection}
             selectable
             checkoutCandidates={checkoutCandidates}
+            maxCheckout={maxCheckout}
             onShiftMonth={shiftMonth}
             onPick={handlePick}
+            onPickBusy={handlePickBusy}
           />
         </div>
         <div className="hidden lg:block">
@@ -180,7 +206,9 @@ export function CalendarPage() {
             selection={selection}
             selectable
             checkoutCandidates={checkoutCandidates}
+            maxCheckout={maxCheckout}
             onPick={handlePick}
+            onPickBusy={handlePickBusy}
           />
         </div>
       </div>

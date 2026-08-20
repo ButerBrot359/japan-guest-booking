@@ -16,6 +16,10 @@ interface CalendarProps {
   onPick: (dayIso: string) => void
   /** Дни, кликабельные как выезд, даже если статус не FREE (полуинтервал) */
   checkoutCandidates?: Set<string>
+  /** Клик по чужому занятому дню с известным именем гостя («кто гостит») */
+  onPickBusy?: (dayIso: string) => void
+  /** Пока выбирается выезд — дни дальше 14 ночей от заезда заблокированы */
+  maxCheckout?: string
 }
 
 const WEEKDAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
@@ -30,10 +34,14 @@ function ariaLabel(iso: string, day: CalendarDay | undefined): string {
   return `${date}, свободно`
 }
 
-function Month({ start, days, selection, selectable, onPick, checkoutCandidates, today }: {
+function Month({
+  start, days, selection, selectable, onPick, checkoutCandidates, onPickBusy, maxCheckout, today,
+}: {
   start: string
   today: string
-} & Pick<CalendarProps, 'days' | 'selection' | 'selectable' | 'onPick' | 'checkoutCandidates'>) {
+} & Pick<CalendarProps,
+  'days' | 'selection' | 'selectable' | 'onPick' | 'checkoutCandidates' | 'onPickBusy' | 'maxCheckout'
+>) {
   const selected = new Set(
     selection.checkIn && selection.checkOut
       ? isoRange(selection.checkIn, selection.checkOut)
@@ -50,7 +58,12 @@ function Month({ start, days, selection, selectable, onPick, checkoutCandidates,
           if (!iso) return <div key={i} />
           const day = days.get(iso)
           const status = day?.status ?? 'FREE'
-          const disabled = !selectable || iso < today || (status !== 'FREE' && !checkoutCandidates?.has(iso))
+          // чужой занятый день с известным именем — кликабелен (открывает «кто гостит»),
+          // свой (mine) остаётся disabled — клик по своей брони не имеет действия
+          const clickableBusy = status === 'BOOKED' && !day?.mine && day?.guestName != null && onPickBusy != null
+          const beyondMax = maxCheckout != null && iso > maxCheckout
+          const disabled = !selectable || iso < today || beyondMax ||
+            (status !== 'FREE' && !checkoutCandidates?.has(iso) && !clickableBusy)
           return (
             <button
               key={iso}
@@ -58,10 +71,11 @@ function Month({ start, days, selection, selectable, onPick, checkoutCandidates,
               aria-label={ariaLabel(iso, day)}
               data-selected={selected.has(iso) ? 'true' : undefined}
               disabled={disabled}
-              onClick={() => onPick(iso)}
+              onClick={() => (clickableBusy ? onPickBusy!(iso) : onPick(iso))}
               className={[
                 'rounded-lg py-1.5',
-                status === 'BOOKED' && 'bg-hanko/80 text-paper',
+                day?.mine && 'bg-leaf text-paper',
+                !day?.mine && status === 'BOOKED' && 'bg-hanko/80 text-paper',
                 status === 'BLOCKED' &&
                   'bg-[repeating-linear-gradient(45deg,var(--color-hatch),var(--color-hatch)_3px,var(--color-hatch-2)_3px,var(--color-hatch-2)_6px)] text-muted',
                 selected.has(iso) && 'bg-ink text-paper',
@@ -93,6 +107,7 @@ export function Calendar(props: CalendarProps) {
         {months.map((m) => <Month key={m} {...props} start={m} today={today} />)}
       </div>
       <div className="text-xs text-muted">
+        <span className="mr-3"><span className="inline-block h-2 w-2 rounded-sm bg-leaf" /> твоя</span>
         <span className="mr-3"><span className="inline-block h-2 w-2 rounded-sm bg-hanko/80" /> занято</span>
         <span><span className="inline-block h-2 w-2 rounded-sm bg-hatch" /> закрыто</span>
       </div>

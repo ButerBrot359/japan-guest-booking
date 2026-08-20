@@ -2,7 +2,7 @@ import type { CalendarDay } from '../api/types'
 import { pickDay } from './selection'
 
 const days = (busy: string[]): Map<string, CalendarDay> =>
-  new Map(busy.map((d) => [d, { date: d, status: 'BOOKED' as const, guestName: null }]))
+  new Map(busy.map((d) => [d, { date: d, status: 'BOOKED' as const, guestName: null, mine: false }]))
 
 const none = { checkIn: null, checkOut: null }
 
@@ -33,4 +33,14 @@ test('клик раньше заезда — новый заезд', () => {
 test('клик при полном выборе начинает заново', () => {
   expect(pickDay({ checkIn: '2026-09-10', checkOut: '2026-09-13' }, '2026-09-20', days([])))
     .toEqual({ checkIn: '2026-09-20', checkOut: null })
+})
+
+test('ровно 14 ночей — можно', () => {
+  expect(pickDay({ checkIn: '2026-09-01', checkOut: null }, '2026-09-15', days([])))
+    .toEqual({ checkIn: '2026-09-01', checkOut: '2026-09-15' })
+})
+
+test('больше 14 ночей — новый заезд с кликнутого дня', () => {
+  expect(pickDay({ checkIn: '2026-09-01', checkOut: null }, '2026-09-16', days([])))
+    .toEqual({ checkIn: '2026-09-16', checkOut: null })
 })

@@ -1,6 +1,8 @@
 import type { CalendarDay } from '../api/types'
 import type { Selection } from '../components/Calendar'
-import { isoRange } from './dates'
+import { isoRange, nightsBetween } from './dates'
+
+const MAX_NIGHTS = 14
 
 export function pickDay(
   selection: Selection,
@@ -10,6 +12,8 @@ export function pickDay(
   const { checkIn, checkOut } = selection
   if (!checkIn || checkOut) return { checkIn: dayIso, checkOut: null }
   if (dayIso <= checkIn) return { checkIn: dayIso, checkOut: null }
+  // вторая линия защиты — зеркалит бэкенд-лимит (RANGE_TOO_LONG)
+  if (nightsBetween(checkIn, dayIso) > MAX_NIGHTS) return { checkIn: dayIso, checkOut: null }
   // все НОЧИ [checkIn, dayIso) свободны; сам день выезда может быть занят — полуинтервал
   const blocked = isoRange(checkIn, dayIso)
     .some((d) => (days.get(d)?.status ?? 'FREE') !== 'FREE')
