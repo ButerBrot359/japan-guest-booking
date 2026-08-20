@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from './client'
-import type { CalendarResponse, Me } from './types'
+import type { CalendarResponse, CreateResult, Me } from './types'
 
 export function useCalendar(fromIso: string, toIso: string) {
   return useQuery({
@@ -41,5 +41,17 @@ export function useAccessRequest() {
   return useMutation({
     mutationFn: (body: { phone: string; name: string; message?: string }) =>
       api.post<void>('/access-requests', body),
+  })
+}
+
+export function useCreateBooking() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { checkIn: string; checkOut: string; comment?: string }) =>
+      api.post<CreateResult>('/bookings', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['me'] })
+      qc.invalidateQueries({ queryKey: ['calendar'] })
+    },
   })
 }

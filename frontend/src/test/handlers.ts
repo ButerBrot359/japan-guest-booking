@@ -32,4 +32,11 @@ export const handlers = [
       ? HttpResponse.json(mockState.me)
       : HttpResponse.json({ code: 'UNAUTHORIZED', message: 'Требуется вход' }, { status: 401 })),
   http.post('/api/access-requests', () => new HttpResponse(null, { status: 201 })),
+  http.post('/api/bookings', async ({ request }) => {
+    const body = (await request.json()) as { checkIn: string; checkOut: string }
+    if (mockState.me) {
+      mockState.me.activeBooking = { id: 100, checkIn: body.checkIn, checkOut: body.checkOut, status: 'PENDING_OTP' }
+    }
+    return HttpResponse.json({ bookingId: 100, willReplaceBooking: null }, { status: 201 })
+  }),
 ]
