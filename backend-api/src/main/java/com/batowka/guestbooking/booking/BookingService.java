@@ -125,7 +125,7 @@ public class BookingService {
                             """, old.getId());
                     if (n == 1) {
                         notifyBookingEvent(user, "BOOKING_CANCELLED",
-                                old.getCheckIn(), old.getCheckOut());
+                                old.getCheckIn(), old.getCheckOut(), "GUEST");
                     }
                 });
         int updated = jdbc.update("""
@@ -139,7 +139,7 @@ public class BookingService {
                 "select check_in, check_out from bookings where id = ?", bookingId);
         notifyBookingEvent(user, "BOOKING_CONFIRMED",
                 ((java.sql.Date) dates.get("check_in")).toLocalDate(),
-                ((java.sql.Date) dates.get("check_out")).toLocalDate());
+                ((java.sql.Date) dates.get("check_out")).toLocalDate(), "GUEST");
     }
 
     @Transactional
@@ -199,7 +199,7 @@ public class BookingService {
         if (updated == 0) {
             throw new BookingExpiredException();
         }
-        notifyBookingEvent(user, "BOOKING_RESCHEDULED", in, out);
+        notifyBookingEvent(user, "BOOKING_RESCHEDULED", in, out, "GUEST");
     }
 
     private void applyCancel(UserAccount user, long bookingId) {
@@ -214,28 +214,29 @@ public class BookingService {
         }
         notifyBookingEvent(user, "BOOKING_CANCELLED",
                 ((java.sql.Date) dates.get("check_in")).toLocalDate(),
-                ((java.sql.Date) dates.get("check_out")).toLocalDate());
+                ((java.sql.Date) dates.get("check_out")).toLocalDate(), "GUEST");
     }
 
-    /** Событие гостю + админу (если у админа привязан Telegram). */
+    /** Событие гостю + админу (если у админа привязан Telegram). by: GUEST | ADMIN. */
     void notifyBookingEvent(UserAccount guest, String eventType,
-                            LocalDate checkIn, LocalDate checkOut) {
-        outboxEvent(guest.getTelegramChatId(), guest, eventType, checkIn, checkOut);
+                            LocalDate checkIn, LocalDate checkOut, String by) {
+        outboxEvent(guest.getTelegramChatId(), guest, eventType, checkIn, checkOut, by);
         jdbc.query("""
                 select telegram_chat_id from users
                 where role = 'ADMIN' and telegram_chat_id is not null
                 """, rs -> {
-            outboxEvent(rs.getLong(1), guest, eventType, checkIn, checkOut);
+            outboxEvent(rs.getLong(1), guest, eventType, checkIn, checkOut, by);
         });
     }
 
     private void outboxEvent(Long chatId, UserAccount guest, String eventType,
-                             LocalDate checkIn, LocalDate checkOut) {
+                             LocalDate checkIn, LocalDate checkOut, String by) {
         outbox.write("notifications.outbound", eventType, Map.of(
                 "chat_id", chatId,
                 "guest_name", guest.getName(),
                 "check_in", checkIn.toString(),
-                "check_out", checkOut.toString()));
+                "check_out", checkOut.toString(),
+                "by", by));
     }
 
     @Transactional

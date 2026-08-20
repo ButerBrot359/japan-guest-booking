@@ -124,6 +124,25 @@ class RescheduleCancelTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void guestCancelEventCarriesByGuest() throws Exception {
+        Long id = guest("+81340000007", 777307L);
+        Long bookingId = confirmedBooking(id, "2027-10-01", "2027-10-05");
+
+        mvc.perform(delete("/api/bookings/" + bookingId).cookie(auth(id)))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/api/bookings/" + bookingId + "/confirm").cookie(auth(id))
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"code\": \"" + lastCode() + "\"}"))
+                .andExpect(status().isNoContent());
+
+        String by = jdbc.queryForObject("""
+                select payload->'payload'->>'by' from outbox
+                where event_type = 'BOOKING_CANCELLED' order by id desc limit 1
+                """, String.class);
+        assertThat(by).isEqualTo("GUEST");
+    }
+
+    @Test
     void rescheduleOfForeignBookingGives403() throws Exception {
         Long masha = guest("+81340000005", 777305L);
         Long petya = guest("+81340000006", 777306L);
