@@ -65,13 +65,14 @@ public class OtpService {
                 "expires_at", Instant.now().plus(TTL).toString()));
     }
 
-    /** Вытесняет активный челлендж гостя (отмена pending-брони и т.п.). */
+    /** Вытесняет активный челлендж конкретной брони (отмена pending-брони и т.п.). */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void expireActive(Long userId) {
+    public void expireActive(Long userId, long bookingId) {
         jdbc.update("""
                 update otp_challenges set status = 'EXPIRED'
                 where user_id = ? and status = 'PENDING'
-                """, userId);
+                  and (payload->>'booking_id')::bigint = ?
+                """, userId, bookingId);
     }
 
     /** Проверяет код активного челленджа гостя для конкретной брони. */

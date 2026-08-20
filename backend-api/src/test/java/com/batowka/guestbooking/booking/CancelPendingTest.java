@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -79,6 +80,35 @@ class CancelPendingTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.code").value("OVERLAPS_OWN_BOOKING"))
                 .andExpect(jsonPath("$.message").value(
                         org.hamcrest.Matchers.containsString("неподтверждённая")));
+    }
+
+    @Test
+    void cancelPendingDoesNotTouchUnrelatedChallenge() throws Exception {
+        Long id = guest("+81312200006", 779606L);
+        // A — подтверждённая бронь, для неё запрошен перенос (её челлендж должен выжить)
+        Long a = jdbc.queryForObject("""
+                insert into bookings(user_id, check_in, check_out, status)
+                values (?, '2028-12-01', '2028-12-05', 'CONFIRMED') returning id
+                """, Long.class, id);
+        // B — заброшенная неподтверждённая бронь, её и отменяем
+        jdbc.queryForObject("""
+                insert into bookings(user_id, check_in, check_out, status)
+                values (?, '2028-12-10', '2028-12-15', 'PENDING_OTP') returning id
+                """, Long.class, id);
+        mvc.perform(patch("/api/bookings/" + a).cookie(auth(id)).contentType(APPLICATION_JSON)
+                        .content("{\"checkIn\": \"2028-12-20\", \"checkOut\": \"2028-12-25\"}"))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(delete("/api/bookings/pending").cookie(auth(id)))
+                .andExpect(status().isNoContent());
+
+        assertThat(jdbc.queryForObject(
+                "select status from bookings where id = ?", String.class, a))
+                .isEqualTo("CONFIRMED");
+        // челлендж переноса A всё ещё живой — отмена B его не задела
+        assertThat(jdbc.queryForObject(
+                "select count(*) from otp_challenges where status = 'PENDING'", Integer.class))
+                .isEqualTo(1);
     }
 
     @Test

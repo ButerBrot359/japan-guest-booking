@@ -280,7 +280,7 @@ public class BookingService {
                 update bookings set status = 'CANCELLED', cancelled_by = 'GUEST'
                 where id = ? and status = 'PENDING_OTP'
                 """, pending.getId());
-        otp.expireActive(userId);
+        otp.expireActive(userId, pending.getId());
     }
 
     /** Активная бронь для /api/me: CONFIRMED, иначе свежайшая PENDING_OTP. */
