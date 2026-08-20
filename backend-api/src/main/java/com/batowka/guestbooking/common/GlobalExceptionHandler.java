@@ -18,6 +18,10 @@ import com.batowka.guestbooking.otp.CodeExpiredException;
 import com.batowka.guestbooking.otp.InvalidCodeException;
 import com.batowka.guestbooking.otp.NoActiveCodeException;
 import com.batowka.guestbooking.otp.ResendTooSoonException;
+import com.batowka.guestbooking.user.ActiveBookingExistsException;
+import com.batowka.guestbooking.user.AlreadyMemberException;
+import com.batowka.guestbooking.user.CannotDeleteAdminException;
+import com.batowka.guestbooking.user.UserNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -186,6 +190,30 @@ public class GlobalExceptionHandler {
 
     public record OverlapsBookingError(String code, String message,
                                        java.util.List<OverlapsBookingException.Conflict> conflicts) {
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiError userNotFound(UserNotFoundException ex) {
+        return new ApiError("NOT_FOUND", ex.getMessage());
+    }
+
+    @ExceptionHandler(AlreadyMemberException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiError alreadyMember(AlreadyMemberException ex) {
+        return new ApiError("ALREADY_MEMBER", ex.getMessage());
+    }
+
+    @ExceptionHandler(ActiveBookingExistsException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiError activeBookingExists(ActiveBookingExistsException ex) {
+        return new ApiError("ACTIVE_BOOKING_EXISTS", ex.getMessage());
+    }
+
+    @ExceptionHandler(CannotDeleteAdminException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiError cannotDeleteAdmin(CannotDeleteAdminException ex) {
+        return new ApiError("CANNOT_DELETE_ADMIN", ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)
