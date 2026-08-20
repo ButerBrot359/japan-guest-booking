@@ -1,0 +1,13 @@
+// Зеркало DTO бэкенда, дословно
+export type DayStatus = 'FREE' | 'BOOKED' | 'BLOCKED'
+export interface CalendarDay { date: string; status: DayStatus; guestName: string | null }
+export interface CalendarResponse { days: CalendarDay[] }
+export type BookingStatus = 'PENDING_OTP' | 'CONFIRMED' | 'CANCELLED'
+export interface ActiveBooking { id: number; checkIn: string; checkOut: string; status: BookingStatus }
+export interface Me {
+  phone: string; name: string; role: 'FRIEND' | 'ADMIN'
+  telegramLinked: boolean; greeting: string | null
+  activeBooking: ActiveBooking | null
+}
+export interface WillReplace { id: number; checkIn: string; checkOut: string }
+export interface CreateResult { bookingId: number; willReplaceBooking: WillReplace | null }

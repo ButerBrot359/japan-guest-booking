@@ -66,5 +66,13 @@ services:
       kafka:
         condition: service_healthy
 
+  frontend:
+    build: ./frontend
+    profiles: ["app"]
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
 volumes:
   pgdata:

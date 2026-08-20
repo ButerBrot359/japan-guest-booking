@@ -75,4 +75,14 @@ public class WhitelistService {
         user.setTelegramChatId(null);
         users.save(user);
     }
+
+    /** null стирает приветствие — фронт вернётся к «Привет, {имя}!». */
+    @Transactional
+    public void setGreeting(long id, String greeting) {
+        UserAccount user = users.findById(id)
+                .filter(u -> u.getDeletedAt() == null)
+                .orElseThrow(UserNotFoundException::new);
+        user.setGreeting(greeting);
+        users.save(user);
+    }
 }

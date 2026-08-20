@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #faf7f0;
+  --color-card: #f1ece0;
+  --color-ink: #2b2620;
+  --color-hanko: #b3402e;
+  --color-muted: #8a8272;
+  --color-leaf: #5a6b3b;
+  --color-leafbg: #eef0e4;
+  /* штриховка заблокированных дней */
+  --color-hatch: #d8d0bf;
+  --color-hatch-2: #e6dfd0;
+  /* предупреждение — плашка Telegram и статус PENDING_OTP */
+  --color-warn-bg: #fdf3d7;
+  --color-warn-border: #dbc47f;
+  --color-warn-text: #6b5a1f;
+  --color-warn-badge: #b99b3e;
+  --font-display: Georgia, "Times New Roman", serif;
+}
+
+body {
+  @apply bg-card text-ink;
+}
