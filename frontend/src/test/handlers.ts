@@ -44,8 +44,10 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 })
   }),
   http.post('/api/bookings/:id/resend-code', () => new HttpResponse(null, { status: 204 })),
+  http.patch('/api/bookings/:id', () => new HttpResponse(null, { status: 204 })),
   http.delete('/api/bookings/pending', () => {
     if (mockState.me) mockState.me.activeBooking = null
     return new HttpResponse(null, { status: 204 })
   }),
+  http.delete('/api/bookings/:id', () => new HttpResponse(null, { status: 204 })),
 ]

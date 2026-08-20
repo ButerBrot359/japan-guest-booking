@@ -74,6 +74,19 @@ export function useResendCode() {
   })
 }
 
+export function useRescheduleBooking() {
+  return useMutation({
+    mutationFn: ({ bookingId, checkIn, checkOut }: { bookingId: number; checkIn: string; checkOut: string }) =>
+      api.patch<void>(`/bookings/${bookingId}`, { checkIn, checkOut }),
+  })
+}
+
+export function useCancelBooking() {
+  return useMutation({
+    mutationFn: (bookingId: number) => api.del<void>(`/bookings/${bookingId}`),
+  })
+}
+
 export function useCancelPending() {
   const qc = useQueryClient()
   return useMutation({
