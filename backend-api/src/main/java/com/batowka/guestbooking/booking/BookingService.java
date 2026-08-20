@@ -6,6 +6,7 @@ import com.batowka.guestbooking.messaging.OutboxWriter;
 import com.batowka.guestbooking.otp.OtpService;
 import com.batowka.guestbooking.user.UserAccount;
 import com.batowka.guestbooking.user.UserAccountRepository;
+import com.batowka.guestbooking.user.UserGoneException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -75,7 +76,9 @@ public class BookingService {
     }
 
     UserAccount requireTelegramLinked(Long userId) {
-        UserAccount user = users.findById(userId).orElseThrow();
+        UserAccount user = users.findById(userId)
+                .filter(u -> u.getDeletedAt() == null)
+                .orElseThrow(UserGoneException::new);
         if (user.getTelegramChatId() == null) {
             throw new TelegramNotLinkedException();
         }

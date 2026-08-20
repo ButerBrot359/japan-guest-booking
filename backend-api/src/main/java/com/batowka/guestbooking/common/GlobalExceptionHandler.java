@@ -58,6 +58,17 @@ public class GlobalExceptionHandler {
         return new ApiError("UNKNOWN_PHONE", ex.getMessage());
     }
 
+    @ExceptionHandler(com.batowka.guestbooking.user.UserGoneException.class)
+    public org.springframework.http.ResponseEntity<ApiError> userGone(
+            com.batowka.guestbooking.user.UserGoneException ex) {
+        return org.springframework.http.ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .header(org.springframework.http.HttpHeaders.SET_COOKIE,
+                        com.batowka.guestbooking.auth.AuthController
+                                .authCookie("", java.time.Duration.ZERO).toString())
+                .body(new ApiError("UNAUTHORIZED", ex.getMessage()));
+    }
+
     @ExceptionHandler(InvalidCredentialsException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiError invalidCredentials(InvalidCredentialsException ex) {
