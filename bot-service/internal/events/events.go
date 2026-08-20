@@ -38,6 +38,14 @@ type BookingEvent struct {
 	GuestName string `json:"guest_name"`
 	CheckIn   string `json:"check_in"`
 	CheckOut  string `json:"check_out"`
+	By        string `json:"by,omitempty"` // GUEST | ADMIN; пусто у старых событий
+}
+
+type AccessRequestReceived struct {
+	ChatID  int64  `json:"chat_id"`
+	Name    string `json:"name"`
+	Phone   string `json:"phone"`
+	Message string `json:"message,omitempty"`
 }
 
 // NewUUID генерирует UUID v4 без внешних зависимостей.

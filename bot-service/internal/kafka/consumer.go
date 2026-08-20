@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
@@ -10,6 +11,18 @@ import (
 
 	"github.com/buterbrot359/japan-guest-booking/bot-service/internal/events"
 )
+
+var ruMonths = [...]string{"января", "февраля", "марта", "апреля", "мая", "июня",
+	"июля", "августа", "сентября", "октября", "ноября", "декабря"}
+
+// ruDate переводит ISO-дату в «22 марта 2026»; нераспознанное отдаёт как есть.
+func ruDate(iso string) string {
+	t, err := time.Parse("2006-01-02", iso)
+	if err != nil {
+		return iso
+	}
+	return fmt.Sprintf("%d %s %d", t.Day(), ruMonths[t.Month()-1], t.Year())
+}
 
 // Sender — минимум, который нужен для доставки уведомления (telegram.Client подходит).
 type Sender interface {
@@ -62,6 +75,17 @@ func (c *consumerCore) handle(ctx context.Context, raw []byte) error {
 		return c.renderBooking(ctx, env, "Бронь отменена")
 	case "BOOKING_RESCHEDULED":
 		return c.renderBooking(ctx, env, "Бронь перенесена")
+	case "ACCESS_REQUEST_RECEIVED":
+		var p events.AccessRequestReceived
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			log.Printf("битый payload ACCESS_REQUEST_RECEIVED: %v", err)
+			return nil
+		}
+		text := "Новая заявка на доступ: " + p.Name + ", " + p.Phone + "."
+		if p.Message != "" {
+			text += "\nКомментарий: " + p.Message
+		}
+		return c.send(ctx, env.EventID, p.ChatID, text)
 	default:
 		log.Printf("незнакомый event_type %q — пропускаю (совместимость вперёд)", env.EventType)
 		return nil
@@ -91,8 +115,11 @@ func (c *consumerCore) renderBooking(ctx context.Context, env events.Envelope, p
 		log.Printf("битый payload %s: %v", env.EventType, err)
 		return nil
 	}
+	if p.By == "ADMIN" {
+		prefix += " владельцем"
+	}
 	return c.send(ctx, env.EventID, p.ChatID,
-		prefix+": "+p.GuestName+", заезд "+p.CheckIn+", выезд "+p.CheckOut+".")
+		prefix+": "+p.GuestName+", заезд "+ruDate(p.CheckIn)+", выезд "+ruDate(p.CheckOut)+".")
 }
 
 // kafkaReader — минимум от *kafkago.Reader, нужный Run (позволяет подменить фейком в тестах).
