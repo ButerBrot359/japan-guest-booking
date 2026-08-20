@@ -128,6 +128,43 @@ func TestBookingEventsAreRendered(t *testing.T) {
 	}
 }
 
+func TestRuDate(t *testing.T) {
+	if got := ruDate("2026-03-22"); got != "22 марта 2026" {
+		t.Errorf("ruDate: %q", got)
+	}
+	if got := ruDate("кривая-дата"); got != "кривая-дата" {
+		t.Errorf("ruDate fallback: %q", got)
+	}
+}
+
+func TestBookingCancelledByAdminText(t *testing.T) {
+	sender := &fakeSender{}
+	c := newConsumerCore(sender)
+	raw := eventJSON("11111111-1111-4111-8111-111111111111", "BOOKING_CANCELLED",
+		`{"chat_id":5,"guest_name":"Маша","check_in":"2026-03-22","check_out":"2026-03-25","by":"ADMIN"}`)
+	if err := c.handle(context.Background(), raw); err != nil {
+		t.Fatal(err)
+	}
+	want := "Бронь отменена владельцем: Маша, заезд 22 марта 2026, выезд 25 марта 2026."
+	if len(sender.sent) != 1 || sender.sent[0] != want {
+		t.Errorf("текст: %v, ожидался %q", sender.sent, want)
+	}
+}
+
+func TestAccessRequestReceivedRender(t *testing.T) {
+	sender := &fakeSender{}
+	c := newConsumerCore(sender)
+	raw := eventJSON("22222222-2222-4222-8222-222222222222", "ACCESS_REQUEST_RECEIVED",
+		`{"chat_id":9,"name":"Незнакомец","phone":"+81313300001","message":"друг Миши"}`)
+	if err := c.handle(context.Background(), raw); err != nil {
+		t.Fatal(err)
+	}
+	want := "Новая заявка на доступ: Незнакомец, +81313300001.\nКомментарий: друг Миши"
+	if len(sender.sent) != 1 || sender.sent[0] != want {
+		t.Errorf("текст: %v, ожидался %q", sender.sent, want)
+	}
+}
+
 // countingFlakySender падает первые failTimes вызовов, затем отправляет успешно.
 type countingFlakySender struct {
 	failTimes int

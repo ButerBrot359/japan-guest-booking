@@ -41,7 +41,7 @@ public class AuthController {
         rateLimiter.check(request.getRemoteAddr());
         String phone = Phones.normalize(body.phone()).orElseThrow(InvalidPhoneException::new);
         // Роль ADMIN сюда не пускаем: беспарольный логин не должен выдавать админский токен
-        UserAccount user = users.findByPhone(phone)
+        UserAccount user = users.findByPhoneAndDeletedAtIsNull(phone)
                 .filter(u -> u.getRole() == Role.FRIEND)
                 .orElseThrow(UnknownPhoneException::new);
         return noContentWithCookie(jwt.issue(user.getId(), user.getRole()), COOKIE_TTL);
@@ -52,7 +52,7 @@ public class AuthController {
         rateLimiter.check(request.getRemoteAddr());
         // Единый 401 на любой провал: не раскрываем, что именно не совпало
         UserAccount admin = Phones.normalize(body.phone())
-                .flatMap(users::findByPhone)
+                .flatMap(users::findByPhoneAndDeletedAtIsNull)
                 .filter(u -> u.getRole() == Role.ADMIN)
                 .filter(u -> u.getPasswordHash() != null
                         && encoder.matches(body.password(), u.getPasswordHash()))
@@ -65,7 +65,7 @@ public class AuthController {
         return noContentWithCookie("", Duration.ZERO);
     }
 
-    static ResponseCookie authCookie(String value, Duration maxAge) {
+    public static ResponseCookie authCookie(String value, Duration maxAge) {
         return ResponseCookie.from(JwtAuthFilter.COOKIE_NAME, value)
                 .httpOnly(true)
                 .sameSite("Lax")
@@ -74,7 +74,7 @@ public class AuthController {
                 .build();
     }
 
-    static ResponseEntity<Void> noContentWithCookie(String token, Duration maxAge) {
+    public static ResponseEntity<Void> noContentWithCookie(String token, Duration maxAge) {
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, authCookie(token, maxAge).toString())
                 .build();

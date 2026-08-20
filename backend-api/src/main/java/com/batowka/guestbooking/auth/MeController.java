@@ -6,6 +6,7 @@ import com.batowka.guestbooking.booking.BookingStatus;
 import com.batowka.guestbooking.user.Role;
 import com.batowka.guestbooking.user.UserAccount;
 import com.batowka.guestbooking.user.UserAccountRepository;
+import com.batowka.guestbooking.user.UserGoneException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,7 +31,9 @@ public class MeController {
     @GetMapping("/api/me")
     public MeResponse me(Authentication auth) {
         Long userId = (Long) auth.getPrincipal();
-        UserAccount user = users.findById(userId).orElseThrow();
+        UserAccount user = users.findById(userId)
+                .filter(u -> u.getDeletedAt() == null)
+                .orElseThrow(UserGoneException::new);
         ActiveBooking activeBooking = bookingService.activeBooking(userId)
                 .map(b -> new ActiveBooking(b.getId(), b.getCheckIn(), b.getCheckOut(), b.getStatus()))
                 .orElse(null);

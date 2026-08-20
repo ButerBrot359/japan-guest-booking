@@ -45,7 +45,7 @@ class CreateBookingTest extends AbstractIntegrationTest {
 
         mvc.perform(post("/api/bookings").cookie(auth(id))
                         .contentType(APPLICATION_JSON).content(body("2027-06-01", "2027-06-05")))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.bookingId").isNumber())
                 .andExpect(jsonPath("$.willReplaceBooking").value(org.hamcrest.Matchers.nullValue()));
 
@@ -96,7 +96,7 @@ class CreateBookingTest extends AbstractIntegrationTest {
 
         mvc.perform(post("/api/bookings").cookie(auth(id))
                         .contentType(APPLICATION_JSON).content(body("2027-10-01", "2027-10-05")))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.willReplaceBooking.checkIn").value("2027-09-01"));
     }
 

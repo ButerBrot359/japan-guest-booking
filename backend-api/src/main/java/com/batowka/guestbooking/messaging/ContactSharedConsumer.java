@@ -82,7 +82,7 @@ public class ContactSharedConsumer {
             log.warn("CONTACT_SHARED с ненормализуемым телефоном, игнорирую");
             return;
         }
-        users.findByPhone(phone.get()).ifPresent(user -> link(user, chatId));
+        users.findByPhoneAndDeletedAtIsNull(phone.get()).ifPresent(user -> link(user, chatId));
         // телефона нет в белом списке — молча игнорируем (спека этапа 3, §3)
     }
 

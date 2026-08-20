@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
@@ -35,6 +37,7 @@ public class BookingController {
     }
 
     @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
     public BookingService.CreateResult create(@Valid @RequestBody CreateRequest body,
                                               Authentication auth) {
         return bookingService.create((Long) auth.getPrincipal(),
@@ -55,6 +58,12 @@ public class BookingController {
                                            Authentication auth) {
         bookingService.requestReschedule((Long) auth.getPrincipal(), id,
                 body.checkIn(), body.checkOut());
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/pending")
+    public ResponseEntity<Void> cancelPending(Authentication auth) {
+        bookingService.cancelPending((Long) auth.getPrincipal());
         return ResponseEntity.noContent().build();
     }
 
