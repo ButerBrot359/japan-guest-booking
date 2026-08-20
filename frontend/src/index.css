@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #faf7f0;
+  --color-card: #f1ece0;
+  --color-ink: #2b2620;
+  --color-hanko: #b3402e;
+  --color-muted: #8a8272;
+  --color-leaf: #5a6b3b;
+  --color-leafbg: #eef0e4;
+  --font-display: Georgia, "Times New Roman", serif;
+}
+
+body {
+  @apply bg-card text-ink;
+}
