@@ -24,7 +24,7 @@ import java.util.Optional;
 public class BookingService {
 
     public static final ZoneId JST = ZoneId.of("Asia/Tokyo");
-    static final List<BookingStatus> ACTIVE =
+    public static final List<BookingStatus> ACTIVE =
             List.of(BookingStatus.PENDING_OTP, BookingStatus.CONFIRMED);
 
     private final BookingRepository bookings;

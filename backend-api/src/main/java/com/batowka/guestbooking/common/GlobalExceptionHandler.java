@@ -11,7 +11,9 @@ import com.batowka.guestbooking.booking.InvalidBookingDatesException;
 import com.batowka.guestbooking.booking.NotYourBookingException;
 import com.batowka.guestbooking.booking.OverlapsOwnBookingException;
 import com.batowka.guestbooking.booking.TelegramNotLinkedException;
+import com.batowka.guestbooking.calendar.BlockedPeriodNotFoundException;
 import com.batowka.guestbooking.calendar.InvalidCalendarRangeException;
+import com.batowka.guestbooking.calendar.OverlapsBookingException;
 import com.batowka.guestbooking.otp.CodeExpiredException;
 import com.batowka.guestbooking.otp.InvalidCodeException;
 import com.batowka.guestbooking.otp.NoActiveCodeException;
@@ -150,6 +152,29 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ApiError bookingNotFound(BookingNotFoundException ex) {
         return new ApiError("NOT_FOUND", ex.getMessage());
+    }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ApiError accessDenied(org.springframework.security.access.AccessDeniedException ex) {
+        // бросается @PreAuthorize внутри MVC — без этого хендлера catch-all дал бы 500
+        return new ApiError("FORBIDDEN", "Недостаточно прав");
+    }
+
+    @ExceptionHandler(BlockedPeriodNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiError blockedPeriodNotFound(BlockedPeriodNotFoundException ex) {
+        return new ApiError("NOT_FOUND", ex.getMessage());
+    }
+
+    @ExceptionHandler(OverlapsBookingException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public OverlapsBookingError overlapsBooking(OverlapsBookingException ex) {
+        return new OverlapsBookingError("OVERLAPS_BOOKING", ex.getMessage(), ex.getConflicts());
+    }
+
+    public record OverlapsBookingError(String code, String message,
+                                       java.util.List<OverlapsBookingException.Conflict> conflicts) {
     }
 
     @ExceptionHandler(Exception.class)
