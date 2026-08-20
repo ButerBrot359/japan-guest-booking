@@ -44,7 +44,7 @@ export function MyBookingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md min-h-screen bg-paper px-4 py-5 pb-40">
+    <div className="mx-auto max-w-md min-h-dvh bg-paper px-4 py-5 pb-40">
       <Header me={me.data ?? null} />
       <h2 className="mb-3 font-display text-lg">Мои брони</h2>
 

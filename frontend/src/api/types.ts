@@ -2,7 +2,7 @@
 export type DayStatus = 'FREE' | 'BOOKED' | 'BLOCKED'
 export interface CalendarDay { date: string; status: DayStatus; guestName: string | null; mine: boolean }
 export interface CalendarResponse { days: CalendarDay[] }
-export type BookingStatus = 'PENDING_OTP' | 'CONFIRMED' | 'CANCELLED'
+export type BookingStatus = 'PENDING_OTP' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED'
 export interface ActiveBooking { id: number; checkIn: string; checkOut: string; status: BookingStatus }
 export interface Me {
   phone: string; name: string; role: 'FRIEND' | 'ADMIN'
