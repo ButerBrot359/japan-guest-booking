@@ -8,6 +8,9 @@
   --color-muted: #8a8272;
   --color-leaf: #5a6b3b;
   --color-leafbg: #eef0e4;
+  /* штриховка заблокированных дней */
+  --color-hatch: #d8d0bf;
+  --color-hatch-2: #e6dfd0;
   --font-display: Georgia, "Times New Roman", serif;
 }
 

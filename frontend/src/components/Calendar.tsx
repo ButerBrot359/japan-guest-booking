@@ -59,7 +59,7 @@ function Month({ start, days, selection, selectable, onPick }: {
                 'rounded-lg py-1.5',
                 status === 'BOOKED' && 'bg-hanko/80 text-paper',
                 status === 'BLOCKED' &&
-                  'bg-[repeating-linear-gradient(45deg,#d8d0bf,#d8d0bf_3px,#e6dfd0_3px,#e6dfd0_6px)] text-muted',
+                  'bg-[repeating-linear-gradient(45deg,var(--color-hatch),var(--color-hatch)_3px,var(--color-hatch-2)_3px,var(--color-hatch-2)_6px)] text-muted',
                 selected.has(iso) && 'bg-ink text-paper',
                 status === 'FREE' && !selected.has(iso) && 'hover:bg-card',
               ].filter(Boolean).join(' ')}
@@ -86,7 +86,7 @@ export function Calendar(props: CalendarProps) {
       <Month {...props} start={addMonths(monthStart, 1)} />
       <div className="text-xs text-muted">
         <span className="mr-3"><span className="inline-block h-2 w-2 rounded-sm bg-hanko/80" /> занято</span>
-        <span><span className="inline-block h-2 w-2 rounded-sm bg-[#d8d0bf]" /> закрыто</span>
+        <span><span className="inline-block h-2 w-2 rounded-sm bg-hatch" /> закрыто</span>
       </div>
     </section>
   )
