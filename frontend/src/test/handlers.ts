@@ -39,4 +39,13 @@ export const handlers = [
     }
     return HttpResponse.json({ bookingId: 100, willReplaceBooking: null }, { status: 201 })
   }),
+  http.post('/api/bookings/:id/confirm', () => {
+    if (mockState.me?.activeBooking) mockState.me.activeBooking.status = 'CONFIRMED'
+    return new HttpResponse(null, { status: 204 })
+  }),
+  http.post('/api/bookings/:id/resend-code', () => new HttpResponse(null, { status: 204 })),
+  http.delete('/api/bookings/pending', () => {
+    if (mockState.me) mockState.me.activeBooking = null
+    return new HttpResponse(null, { status: 204 })
+  }),
 ]

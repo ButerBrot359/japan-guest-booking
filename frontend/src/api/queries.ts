@@ -55,3 +55,32 @@ export function useCreateBooking() {
     },
   })
 }
+
+export function useConfirmBooking() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ bookingId, code }: { bookingId: number; code: string }) =>
+      api.post<void>(`/bookings/${bookingId}/confirm`, { code }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['me'] })
+      qc.invalidateQueries({ queryKey: ['calendar'] })
+    },
+  })
+}
+
+export function useResendCode() {
+  return useMutation({
+    mutationFn: (bookingId: number) => api.post<void>(`/bookings/${bookingId}/resend-code`),
+  })
+}
+
+export function useCancelPending() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.del<void>('/bookings/pending'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['me'] })
+      qc.invalidateQueries({ queryKey: ['calendar'] })
+    },
+  })
+}
