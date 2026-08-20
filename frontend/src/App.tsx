@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { useCalendar } from './api/queries'
+import { useCalendar, useMe } from './api/queries'
 import { Calendar, type Selection } from './components/Calendar'
+import { LoginCard } from './components/LoginCard'
 import { addMonths, todayIso } from './lib/dates'
 
 export default function App() {
   const [monthStart, setMonthStart] = useState(todayIso().slice(0, 7) + '-01')
   const [selection, setSelection] = useState<Selection>({ checkIn: null, checkOut: null })
+  const me = useMe()
   const calendar = useCalendar(monthStart, addMonths(monthStart, 2))
   const days = new Map((calendar.data?.days ?? []).map((d) => [d.date, d]))
 
@@ -16,6 +18,7 @@ export default function App() {
           Домик в Японии <span className="text-hanko">◉</span>
         </h1>
       </header>
+      {me.data == null && !me.isLoading && <LoginCard />}
       <Calendar
         monthStart={monthStart}
         days={days}
