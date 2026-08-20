@@ -1,7 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
 import { mockState } from './test/handlers'
+import { server } from './test/setup'
 import App from './App'
 
 function renderApp() {
@@ -59,4 +61,26 @@ test('перенос: режим выбора новых дат с подска�
   renderApp()
   await userEvent.click(await screen.findByRole('button', { name: 'Перенести' }))
   expect(await screen.findByText(/выбери новые даты/)).toBeInTheDocument()
+})
+
+test('смена режима сбрасывает устаревшую ошибку create и выбор дат', async () => {
+  seedFreeSeptember()
+  loginAs({ activeBooking: { id: 7, checkIn: '2026-09-10', checkOut: '2026-09-13', status: 'CONFIRMED' } })
+  server.use(http.post('/api/bookings', () =>
+    HttpResponse.json({ code: 'DATES_TAKEN', message: '' }, { status: 409 })))
+  renderApp()
+
+  await clickFreeDay('10')
+  await clickFreeDay('13')
+  await userEvent.click(screen.getByRole('button', { name: 'Забронировать' }))
+  expect(await screen.findByText(/только что заняли/)).toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: 'Перенести' }))
+  // в режиме переноса выбираем новые даты — селекшен снова непустой, флоу вернётся в idle
+  await clickFreeDay('11')
+  await clickFreeDay('14')
+  await userEvent.click(screen.getByRole('button', { name: 'Передумал' }))
+
+  expect(screen.queryByText(/только что заняли/)).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Забронировать' })).not.toBeInTheDocument()
 })

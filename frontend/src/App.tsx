@@ -44,6 +44,14 @@ export default function App() {
 
   const resetSelection = () => setSelection({ checkIn: null, checkOut: null })
 
+  // смена режима — прошлые ошибки неактуальны
+  const switchFlow = (next: Flow) => {
+    create.reset()
+    reschedule.reset()
+    resetSelection()
+    setFlow(next)
+  }
+
   const submitBooking = (comment: string) => {
     if (!selection.checkIn || !selection.checkOut) return
     if (flow.kind === 'selecting-reschedule' && active) {
@@ -84,7 +92,7 @@ export default function App() {
       {me.data != null && (
         <ProfileCard
           me={me.data}
-          onReschedule={() => { resetSelection(); setFlow({ kind: 'selecting-reschedule' }) }}
+          onReschedule={() => switchFlow({ kind: 'selecting-reschedule' })}
           onCancel={() => setFlow({ kind: 'confirm-cancel' })}
           onEnterCode={() => active && setFlow({ kind: 'otp', bookingId: active.id, subtitle: `заезд ${isoToRu(active.checkIn)} → выезд ${isoToRu(active.checkOut)}`, cancelable: true })}
           onCancelPending={() => cancelPending.mutate()}
@@ -94,7 +102,7 @@ export default function App() {
       {flow.kind === 'selecting-reschedule' && (
         <p className="mb-2 rounded-lg bg-card p-2 text-xs text-muted">
           Перенос: выбери новые даты в календаре.{' '}
-          <button type="button" className="text-hanko" onClick={() => setFlow({ kind: 'idle' })}>Передумал</button>
+          <button type="button" className="text-hanko" onClick={() => switchFlow({ kind: 'idle' })}>Передумал</button>
         </p>
       )}
 
@@ -126,13 +134,17 @@ export default function App() {
             <div className="flex gap-2 text-xs">
               <button type="button" className="flex-1 rounded-lg border border-ink py-2"
                 onClick={() => setFlow({ kind: 'idle' })}>Оставить</button>
-              <button type="button" className="flex-1 rounded-lg bg-hanko py-2 text-paper"
+              <button type="button" className="flex-1 rounded-lg bg-hanko py-2 text-paper disabled:opacity-50"
+                disabled={cancel.isPending}
                 onClick={() => cancel.mutate(active.id, {
                   onSuccess: () => setFlow({ kind: 'otp', bookingId: active.id, subtitle: 'отмена брони', cancelable: false }),
                 })}>
                 Да, отменить
               </button>
             </div>
+            {cancel.error instanceof ApiError && (
+              <p className="mt-2 text-xs text-hanko">Не получилось — попробуй ещё раз.</p>
+            )}
           </div>
         </div>
       )}
