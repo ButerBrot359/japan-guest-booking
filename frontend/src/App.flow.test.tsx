@@ -108,6 +108,20 @@ test('полный reschedule-флоу: перенос → новые даты �
   await waitFor(() => expect(screen.queryByLabelText('Код из Telegram')).not.toBeInTheDocument())
 })
 
+test('аноним кликает дату → модалка логина → после входа дата уже выбрана', async () => {
+  seedFreeSeptember()
+  renderApp()
+  const day = (await screen.findAllByRole('button', { name: /10 сентября.*свободно/i }))[0]
+  await userEvent.click(day)
+  expect(await screen.findByText(/войдите, чтобы выбрать даты/i)).toBeInTheDocument()
+  await userEvent.type(screen.getByPlaceholderText(/___/), '+77787886432')
+  await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
+  await waitFor(() =>
+    expect(screen.queryByText(/войдите, чтобы выбрать даты/i)).not.toBeInTheDocument())
+  expect((await screen.findAllByRole('button', { name: /10 сентября/i }))[0])
+    .toHaveAttribute('data-selected')
+})
+
 test('смена режима сбрасывает устаревшую ошибку create и выбор дат', async () => {
   seedFreeSeptember()
   loginAs({ activeBooking: { id: 7, checkIn: '2026-09-10', checkOut: '2026-09-13', status: 'CONFIRMED' } })

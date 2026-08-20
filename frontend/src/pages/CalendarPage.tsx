@@ -8,7 +8,7 @@ import {
 import { BookingSheet } from '../components/BookingSheet'
 import { Calendar, type Selection } from '../components/Calendar'
 import { Header } from '../components/Header'
-import { LoginCard } from '../components/LoginCard'
+import { LoginModal } from '../components/LoginModal'
 import { OtpModal } from '../components/OtpModal'
 import { ProfileCard } from '../components/ProfileCard'
 import { addMonths, isoRange, isoToRu, todayIso } from '../lib/dates'
@@ -27,6 +27,8 @@ export function CalendarPage() {
   const [monthStart, setMonthStart] = useState(yearFrom)
   const [selection, setSelection] = useState<Selection>({ checkIn: null, checkOut: null })
   const [flow, setFlow] = useState<Flow>({ kind: 'idle' })
+  const [pendingDate, setPendingDate] = useState<string | null>(null)
+  const [loginOpen, setLoginOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -78,6 +80,24 @@ export function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // вход завершился, пока была кликнута дата — досрочно выбираем её как заезд
+  useEffect(() => {
+    if (me.data != null && pendingDate != null) {
+      setSelection({ checkIn: pendingDate, checkOut: null })
+      setPendingDate(null)
+      setLoginOpen(false)
+    }
+  }, [me.data, pendingDate])
+
+  const handlePick = (iso: string) => {
+    if (me.data == null) {
+      setPendingDate(iso)
+      setLoginOpen(true)
+      return
+    }
+    setSelection((s) => pickDay(s, iso, days))
+  }
+
   const submitBooking = (comment: string) => {
     if (!selection.checkIn || !selection.checkOut) return
     if (flow.kind === 'selecting-reschedule' && active) {
@@ -113,11 +133,10 @@ export function CalendarPage() {
       bothPicked ? 'pb-40' : 'pb-8',
     ].join(' ')}>
       <div className="lg:col-span-2">
-        <Header me={me.data ?? null} />
+        <Header me={me.data ?? null} onLoginClick={loginOpen ? undefined : () => setLoginOpen(true)} />
       </div>
 
       <div className="lg:order-2 lg:sticky lg:top-6 lg:self-start">
-        {me.data == null && !me.isLoading && <LoginCard />}
         {me.data != null && (
           <ProfileCard
             me={me.data}
@@ -146,10 +165,10 @@ export function CalendarPage() {
             months={mobileMonths}
             days={days}
             selection={selection}
-            selectable={me.data != null}
+            selectable
             checkoutCandidates={checkoutCandidates}
             onShiftMonth={shiftMonth}
-            onPick={(iso) => setSelection((s) => pickDay(s, iso, days))}
+            onPick={handlePick}
           />
         </div>
         <div className="hidden lg:block">
@@ -157,12 +176,14 @@ export function CalendarPage() {
             months={desktopMonths}
             days={days}
             selection={selection}
-            selectable={me.data != null}
+            selectable
             checkoutCandidates={checkoutCandidates}
-            onPick={(iso) => setSelection((s) => pickDay(s, iso, days))}
+            onPick={handlePick}
           />
         </div>
       </div>
+
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
 
       {bothPicked && me.data != null && (flow.kind === 'idle' || flow.kind === 'selecting-reschedule') && (
         <BookingSheet
