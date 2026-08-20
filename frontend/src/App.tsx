@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useCalendar, useMe } from './api/queries'
 import { Calendar, type Selection } from './components/Calendar'
 import { LoginCard } from './components/LoginCard'
+import { ProfileCard } from './components/ProfileCard'
 import { addMonths, todayIso } from './lib/dates'
 
 export default function App() {
@@ -18,6 +19,15 @@ export default function App() {
           Домик в Японии <span className="text-hanko">◉</span>
         </h1>
       </header>
+      {me.data != null && (
+        <ProfileCard
+          me={me.data}
+          onReschedule={() => {}}
+          onCancel={() => {}}
+          onEnterCode={() => {}}
+          onCancelPending={() => {}}
+        />
+      )}
       {me.data == null && !me.isLoading && <LoginCard />}
       <Calendar
         monthStart={monthStart}
