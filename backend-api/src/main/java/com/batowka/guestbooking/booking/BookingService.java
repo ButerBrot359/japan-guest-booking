@@ -47,6 +47,9 @@ public class BookingService {
 
     @Transactional
     public CreateResult create(Long userId, LocalDate checkIn, LocalDate checkOut, String comment) {
+        // до вычисления willReplaceBooking — иначе новая бронь «заменит» уже
+        // состоявшуюся поездку и история потеряется
+        completePastBooking(userId);
         UserAccount user = requireTelegramLinked(userId);
         validateDates(checkIn, checkOut);
         // пересечение с СОБСТВЕННОЙ активной бронью — подсказываем перенос
@@ -295,10 +298,21 @@ public class BookingService {
     }
 
     /** Активная бронь для /api/me: CONFIRMED, иначе свежайшая PENDING_OTP. */
-    @Transactional(readOnly = true)
+    @Transactional
     public Optional<Booking> activeBooking(Long userId) {
+        completePastBooking(userId);
         return bookings.findFirstByUserIdAndStatusOrderByIdDesc(userId, BookingStatus.CONFIRMED)
                 .or(() -> bookings.findFirstByUserIdAndStatusOrderByIdDesc(
                         userId, BookingStatus.PENDING_OTP));
+    }
+
+    /**
+     * Лениво завершает прошедшие поездки: CONFIRMED с выездом сегодня или раньше → COMPLETED.
+     * Атомарный условный UPDATE (урок этапа 5) — без шедулера и без exists-then-update.
+     */
+    public void completePastBooking(Long userId) {
+        jdbc.update("update bookings set status = 'COMPLETED' "
+                        + "where user_id = ? and status = 'CONFIRMED' and check_out <= ?",
+                userId, LocalDate.now(JST));
     }
 }
