@@ -36,6 +36,9 @@ public class BookingController {
     public record RescheduleRequest(@NotNull LocalDate checkIn, @NotNull LocalDate checkOut) {
     }
 
+    public record CommentRequest(@Size(max = 500) String comment) {
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public BookingService.CreateResult create(@Valid @RequestBody CreateRequest body,
@@ -59,6 +62,12 @@ public class BookingController {
         bookingService.requestReschedule((Long) auth.getPrincipal(), id,
                 body.checkIn(), body.checkOut());
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/active")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void updateComment(Authentication auth, @Valid @RequestBody CommentRequest body) {
+        bookingService.updateComment((Long) auth.getPrincipal(), body.comment());
     }
 
     @DeleteMapping("/pending")

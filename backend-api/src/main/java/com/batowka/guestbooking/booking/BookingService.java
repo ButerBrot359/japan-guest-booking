@@ -315,4 +315,15 @@ public class BookingService {
                         + "where user_id = ? and status = 'CONFIRMED' and check_out <= ?",
                 userId, LocalDate.now(JST));
     }
+
+    /** Гость меняет комментарий своей активной брони; без OTP — поле не критичное. */
+    @Transactional
+    public void updateComment(Long userId, String comment) {
+        users.findById(userId)
+                .filter(u -> u.getDeletedAt() == null)
+                .orElseThrow(UserGoneException::new);
+        Booking active = activeBooking(userId).orElseThrow(BookingNotFoundException::new);
+        String normalized = (comment == null || comment.isBlank()) ? null : comment.trim();
+        jdbc.update("update bookings set comment = ? where id = ?", normalized, active.getId());
+    }
 }
