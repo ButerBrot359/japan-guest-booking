@@ -65,3 +65,24 @@ test('без showCancelPending кнопки отмены нет', () => {
   renderModal({ showCancelPending: false })
   expect(screen.queryByRole('button', { name: 'Отменить бронь' })).not.toBeInTheDocument()
 })
+
+test('resend сбрасывает устаревшую ошибку кода', async () => {
+  // shouldAdvanceTime: фейковые часы тикают вместе с реальным временем — msw/fetch
+  // резолвятся как обычно, а 60с кулдауна можно перемотать вручную advanceTimersByTimeAsync
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    server.use(http.post('/api/bookings/100/confirm', () =>
+      HttpResponse.json({ code: 'INVALID_CODE', message: '' }, { status: 400 })))
+    renderModal()
+    await user.type(screen.getByLabelText('Код из Telegram'), '000000')
+    await user.click(screen.getByRole('button', { name: 'Подтвердить' }))
+    expect(await screen.findByText('Неверный код')).toBeInTheDocument()
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    await user.click(screen.getByRole('button', { name: /Отправить новый/ }))
+    expect(screen.queryByText('Неверный код')).not.toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
+})

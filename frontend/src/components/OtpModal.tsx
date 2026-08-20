@@ -29,6 +29,8 @@ export function OtpModal({ bookingId, subtitle, showCancelPending, onDone, onClo
     if (cooldown <= 0) return
     const t = setInterval(() => setCooldown((c) => c - 1), 1000)
     return () => clearInterval(t)
+    // boolean-dep намеренно: интервал перезапускается только на границе 0, не каждый тик
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cooldown > 0])
 
   const errorCode =
@@ -69,7 +71,8 @@ export function OtpModal({ bookingId, subtitle, showCancelPending, onDone, onClo
             disabled={cooldown > 0 || resend.isPending}
             onClick={() =>
               resend.mutate(bookingId, {
-                onSettled: () => { setCooldown(60); setCode('') },
+                // новый код — старая ошибка неактуальна
+                onSettled: () => { confirm.reset(); setCooldown(60); setCode('') },
               })
             }
           >
