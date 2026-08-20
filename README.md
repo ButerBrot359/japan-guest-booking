@@ -8,6 +8,14 @@
 - `contracts/` — JSON-схемы Kafka-событий между сервисами
 - `docs/` — спека, планы, обучающие разборы
 
+Полный стек в Docker (ручное тестирование — API на :8080, бот с реальным токеном):
+
+```bash
+cp .env.example .env   # один раз: вписать BOT_TOKEN от @BotFather
+docker compose -f docker-compose.dev.yml --profile app up --build -d
+docker compose -f docker-compose.dev.yml --profile app down   # остановить
+```
+
 Локальная разработка:
 
 ### backend-api
