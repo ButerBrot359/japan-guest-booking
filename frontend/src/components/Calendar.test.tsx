@@ -2,10 +2,17 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import type { CalendarDay } from '../api/types'
+import { todayIso } from '../lib/dates'
 import { Calendar } from './Calendar'
 
 function daysMap(entries: CalendarDay[]): Map<string, CalendarDay> {
   return new Map(entries.map((d) => [d.date, d]))
+}
+
+function yesterdayOf(iso: string): string {
+  const d = new Date(iso + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() - 1)
+  return d.toISOString().slice(0, 10)
 }
 
 const base = {
@@ -53,6 +60,16 @@ test('выбранный диапазон подсвечен', () => {
     selection={{ checkIn: '2026-09-10', checkOut: '2026-09-13' }} />)
   expect(screen.getByRole('button', { name: /10 сентября/i })).toHaveAttribute('data-selected', 'true')
   expect(screen.getByRole('button', { name: /12 сентября/i })).toHaveAttribute('data-selected', 'true')
+})
+
+test('прошедший день недоступен для выбора, даже если он FREE', () => {
+  const yesterday = yesterdayOf(todayIso())
+  const monthStart = yesterday.slice(0, 7) + '-01'
+  const dayNum = String(Number(yesterday.slice(8)))
+  render(<Calendar {...base} monthStart={monthStart} onPick={vi.fn()} days={daysMap([])} />)
+  const target = screen.getAllByRole('button', { name: /свободно/ })
+    .find((b) => b.textContent === dayNum)
+  expect(target).toBeDisabled()
 })
 
 test('день из checkoutCandidates кликабелен несмотря на статус', async () => {

@@ -93,7 +93,11 @@ export default function App() {
         <ProfileCard
           me={me.data}
           onReschedule={() => switchFlow({ kind: 'selecting-reschedule' })}
-          onCancel={() => setFlow({ kind: 'confirm-cancel' })}
+          onCancel={() => {
+            // открываем диалог отмены заново — прошлая ошибка неактуальна
+            cancel.reset()
+            setFlow({ kind: 'confirm-cancel' })
+          }}
           onEnterCode={() => active && setFlow({ kind: 'otp', bookingId: active.id, subtitle: `заезд ${isoToRu(active.checkIn)} → выезд ${isoToRu(active.checkOut)}`, cancelable: true })}
           onCancelPending={() => cancelPending.mutate()}
         />

@@ -1,5 +1,5 @@
 import type { CalendarDay } from '../api/types'
-import { addMonths, isoRange, monthGrid, monthTitle } from '../lib/dates'
+import { addMonths, isoRange, monthGrid, monthTitle, todayIso } from '../lib/dates'
 
 export interface Selection {
   checkIn: string | null
@@ -29,8 +29,9 @@ function ariaLabel(iso: string, day: CalendarDay | undefined): string {
   return `${date}, свободно`
 }
 
-function Month({ start, days, selection, selectable, onPick, checkoutCandidates }: {
+function Month({ start, days, selection, selectable, onPick, checkoutCandidates, today }: {
   start: string
+  today: string
 } & Pick<CalendarProps, 'days' | 'selection' | 'selectable' | 'onPick' | 'checkoutCandidates'>) {
   const selected = new Set(
     selection.checkIn && selection.checkOut
@@ -48,7 +49,7 @@ function Month({ start, days, selection, selectable, onPick, checkoutCandidates 
           if (!iso) return <div key={i} />
           const day = days.get(iso)
           const status = day?.status ?? 'FREE'
-          const disabled = !selectable || (status !== 'FREE' && !checkoutCandidates?.has(iso))
+          const disabled = !selectable || iso < today || (status !== 'FREE' && !checkoutCandidates?.has(iso))
           return (
             <button
               key={iso}
@@ -77,6 +78,7 @@ function Month({ start, days, selection, selectable, onPick, checkoutCandidates 
 
 export function Calendar(props: CalendarProps) {
   const { monthStart, onShiftMonth } = props
+  const today = todayIso() // один раз на рендер, не в каждой ячейке
   return (
     <section>
       <div className="mb-2 flex items-center justify-between text-sm text-muted">
@@ -84,8 +86,8 @@ export function Calendar(props: CalendarProps) {
         <span className="text-xs">выбери даты</span>
         <button type="button" aria-label="Следующий месяц" onClick={() => onShiftMonth(1)}>▶</button>
       </div>
-      <Month {...props} start={monthStart} />
-      <Month {...props} start={addMonths(monthStart, 1)} />
+      <Month {...props} start={monthStart} today={today} />
+      <Month {...props} start={addMonths(monthStart, 1)} today={today} />
       <div className="text-xs text-muted">
         <span className="mr-3"><span className="inline-block h-2 w-2 rounded-sm bg-hanko/80" /> занято</span>
         <span><span className="inline-block h-2 w-2 rounded-sm bg-hatch" /> закрыто</span>

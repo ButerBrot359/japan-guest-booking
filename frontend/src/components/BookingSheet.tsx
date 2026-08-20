@@ -6,6 +6,7 @@ const ERROR_TEXTS: Record<string, string> = {
   DATES_TAKEN: 'Эти даты только что заняли — выбери другие.',
   OVERLAPS_OWN_BOOKING: 'Эти даты пересекаются с твоей текущей бронью.',
   TELEGRAM_NOT_LINKED: 'Сначала привяжи Telegram — напиши боту и поделись контактом.',
+  VALIDATION_ERROR: 'Даты в прошлом или некорректны — выбери заново.',
 }
 
 function nightsWord(n: number): string {

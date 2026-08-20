@@ -38,7 +38,8 @@ export function addMonths(isoFirstDay: string, delta: number): string {
 }
 
 export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  // сегодня по JST (UTC+9, без DST) — как LocalDate.now(JST) на бэкенде
+  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
 }
 
 export function isoRange(fromInclusive: string, toExclusive: string): string[] {

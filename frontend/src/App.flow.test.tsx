@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { mockState } from './test/handlers'
@@ -24,8 +24,15 @@ function loginAs(me: Partial<typeof mockState.me>) {
 }
 
 async function clickFreeDay(dayNum: string) {
-  const buttons = await screen.findAllByRole('button', { name: /свободно/ })
-  const target = buttons.find((b) => b.textContent === dayNum)!
+  // тот же номер дня встречается в обоих отрисованных месяцах — прошедшие дни
+  // задизейблены, а до загрузки /api/me задизейблено вообще всё. Ждём (с ретраями),
+  // пока не появится кликабельная кнопка с нужным номером — это и есть будущий месяц.
+  const target = await waitFor(() => {
+    const btn = screen.getAllByRole('button', { name: /свободно/ })
+      .find((b) => b.textContent === dayNum && !b.hasAttribute('disabled'))
+    if (!btn) throw new Error(`день ${dayNum} пока недоступен для выбора`)
+    return btn
+  })
   await userEvent.click(target)
 }
 
@@ -61,6 +68,23 @@ test('перенос: режим выбора новых дат с подска�
   renderApp()
   await userEvent.click(await screen.findByRole('button', { name: 'Перенести' }))
   expect(await screen.findByText(/выбери новые даты/)).toBeInTheDocument()
+})
+
+test('полный reschedule-флоу: перенос → новые даты → OTP с «перенос» в подзаголовке → модалка закрывается', async () => {
+  seedFreeSeptember()
+  loginAs({ activeBooking: { id: 7, checkIn: '2026-09-10', checkOut: '2026-09-13', status: 'CONFIRMED' } })
+  renderApp()
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Перенести' }))
+  await clickFreeDay('11')
+  await clickFreeDay('14')
+  await userEvent.click(screen.getByRole('button', { name: 'Забронировать' }))
+
+  expect(await screen.findByText(/перенос/)).toBeInTheDocument()
+  await userEvent.type(await screen.findByLabelText('Код из Telegram'), '471523')
+  await userEvent.click(screen.getByRole('button', { name: 'Подтвердить' }))
+
+  await waitFor(() => expect(screen.queryByLabelText('Код из Telegram')).not.toBeInTheDocument())
 })
 
 test('смена режима сбрасывает устаревшую ошибку create и выбор дат', async () => {

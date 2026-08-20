@@ -33,4 +33,11 @@ cp .env.example .env                              # и вписать BOT_TOKEN 
 cd bot-service && BOT_TOKEN=$(grep BOT_TOKEN ../.env | cut -d= -f2) go run ./cmd/bot
 ```
 
+### frontend
+
+```bash
+cd frontend && cp .env.example .env   # опционально: VITE_BOT_URL — ссылка на Telegram-бота для подсказки в UI
+npm install && npm run dev
+```
+
 Дизайн: `docs/specs/2026-08-13-japan-guest-booking-design.md`
