@@ -22,6 +22,9 @@ public class AdminUserController {
     public record AddRequest(@NotBlank String phone, @NotBlank @Size(max = 100) String name) {
     }
 
+    public record GreetingRequest(@Size(max = 300) String greeting) {
+    }
+
     @GetMapping
     public List<WhitelistService.UserRow> list() {
         return whitelist.list();
@@ -37,5 +40,11 @@ public class AdminUserController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable long id) {
         whitelist.softDelete(id);
+    }
+
+    @PatchMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void setGreeting(@PathVariable long id, @Valid @RequestBody GreetingRequest body) {
+        whitelist.setGreeting(id, body.greeting());
     }
 }

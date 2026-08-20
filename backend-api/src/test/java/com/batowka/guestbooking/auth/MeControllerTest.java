@@ -59,6 +59,17 @@ class MeControllerTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void meCarriesGreeting() throws Exception {
+        Long id = jdbc.queryForObject(
+                "insert into users(phone, name, greeting) values ('+81322200001', 'Маша', 'С возвращением!') returning id",
+                Long.class);
+        mvc.perform(get("/api/me")
+                        .cookie(new Cookie(JwtAuthFilter.COOKIE_NAME, jwt.issue(id, Role.FRIEND))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.greeting").value("С возвращением!"));
+    }
+
+    @Test
     void anonymousGets401() throws Exception {
         mvc.perform(get("/api/me"))
                 .andExpect(status().isUnauthorized())

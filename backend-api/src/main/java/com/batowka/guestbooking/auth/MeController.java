@@ -25,7 +25,7 @@ public class MeController {
     }
 
     public record MeResponse(String phone, String name, Role role, boolean telegramLinked,
-                             ActiveBooking activeBooking) {
+                             String greeting, ActiveBooking activeBooking) {
     }
 
     @GetMapping("/api/me")
@@ -38,6 +38,6 @@ public class MeController {
                 .map(b -> new ActiveBooking(b.getId(), b.getCheckIn(), b.getCheckOut(), b.getStatus()))
                 .orElse(null);
         return new MeResponse(user.getPhone(), user.getName(), user.getRole(),
-                user.getTelegramChatId() != null, activeBooking);
+                user.getTelegramChatId() != null, user.getGreeting(), activeBooking);
     }
 }
