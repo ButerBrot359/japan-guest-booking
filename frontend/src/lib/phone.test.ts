@@ -19,3 +19,11 @@ it('вставка полного номера с +7 или 8', () => {
 it('обрезка лишнего', () => expect(phoneDigits('77878864321111')).toBe('7787886432'))
 
 it('канон для API', () => expect(toApiPhone('7787886432')).toBe('+77787886432'))
+
+it('round-trip: посимвольный набор через отформатированное значение', () => {
+  let digits = ''
+  for (const ch of '9990001122') {
+    digits = phoneDigits(formatPhone(digits) + ch)
+  }
+  expect(digits).toBe('9990001122')
+})

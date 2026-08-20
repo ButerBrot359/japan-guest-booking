@@ -13,10 +13,7 @@ function renderCard() {
 
 test('успешный вход дёргает POST /api/auth/login', async () => {
   renderCard()
-  const input = screen.getByTestId('phone-input') as HTMLInputElement
-  // Click to focus and paste - easier for masked input handling
-  await userEvent.click(input)
-  await userEvent.paste('+79990001122')
+  await userEvent.type(screen.getByTestId('phone-input'), '9990001122')
   await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
   // mockState.me выставляет MSW-ручка логина; ре-рендер профиля проверяет App-тест задачи 11
   expect(mockState.me?.phone).toBe('+79990001122')
@@ -26,9 +23,7 @@ test('UNKNOWN_PHONE раскрывает форму заявки', async () => {
   server.use(http.post('/api/auth/login', () =>
     HttpResponse.json({ code: 'UNKNOWN_PHONE', message: '' }, { status: 401 })))
   renderCard()
-  const input = screen.getByTestId('phone-input')
-  await userEvent.click(input)
-  await userEvent.paste('+79990009999')
+  await userEvent.type(screen.getByTestId('phone-input'), '9990009999')
   await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
   expect(await screen.findByText(/нет в списке гостей/)).toBeInTheDocument()
 
@@ -45,9 +40,7 @@ test('ALREADY_MEMBER в заявке показывает подсказку', a
       HttpResponse.json({ code: 'ALREADY_MEMBER', message: '' }, { status: 409 })),
   )
   renderCard()
-  const input = screen.getByTestId('phone-input')
-  await userEvent.click(input)
-  await userEvent.paste('+79990008888')
+  await userEvent.type(screen.getByTestId('phone-input'), '9990008888')
   await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
   await userEvent.type(await screen.findByPlaceholderText(/зовут/), 'Свой')
   await userEvent.click(screen.getByRole('button', { name: 'Отправить заявку' }))
@@ -58,9 +51,7 @@ test('RATE_LIMITED показывает «подожди минуту»', async 
   server.use(http.post('/api/auth/login', () =>
     HttpResponse.json({ code: 'RATE_LIMITED', message: '' }, { status: 429 })))
   renderCard()
-  const input = screen.getByTestId('phone-input')
-  await userEvent.click(input)
-  await userEvent.paste('+79990007777')
+  await userEvent.type(screen.getByTestId('phone-input'), '9990007777')
   await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
   expect(await screen.findByText(/подожди минуту/)).toBeInTheDocument()
 })
@@ -70,18 +61,15 @@ test('повторный вход сбрасывает состояние про
     HttpResponse.json({ code: 'UNKNOWN_PHONE', message: '' }, { status: 401 })))
   renderCard()
 
-  let phoneInput = screen.getByTestId('phone-input')
-  await userEvent.click(phoneInput)
-  await userEvent.paste('+79990001111')
+  await userEvent.type(screen.getByTestId('phone-input'), '9990001111')
   await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
   await userEvent.type(await screen.findByPlaceholderText(/зовут/), 'Незнакомец')
   await userEvent.click(screen.getByRole('button', { name: 'Отправить заявку' }))
   expect(await screen.findByText(/Заявка отправлена/)).toBeInTheDocument()
 
-  phoneInput = screen.getByTestId('phone-input')
+  const phoneInput = screen.getByTestId('phone-input')
   await userEvent.clear(phoneInput)
-  await userEvent.click(phoneInput)
-  await userEvent.paste('+79990002222')
+  await userEvent.type(phoneInput, '9990002222')
   await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
 
   const nameInput = await screen.findByPlaceholderText(/зовут/)

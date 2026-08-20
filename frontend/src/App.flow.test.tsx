@@ -115,9 +115,7 @@ test('аноним кликает дату → модалка логина → �
   const day = (await screen.findAllByRole('button', { name: /10 сентября.*свободно/i }))[0]
   await userEvent.click(day)
   expect(await screen.findByText(/войдите, чтобы выбрать даты/i)).toBeInTheDocument()
-  const phoneInput = screen.getByTestId('phone-input')
-  await userEvent.click(phoneInput)
-  await userEvent.paste('+77787886432')
+  await userEvent.type(screen.getByTestId('phone-input'), '7787886432')
   await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
   await waitFor(() =>
     expect(screen.queryByText(/войдите, чтобы выбрать даты/i)).not.toBeInTheDocument())
