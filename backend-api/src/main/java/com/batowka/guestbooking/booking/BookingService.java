@@ -1,5 +1,7 @@
 package com.batowka.guestbooking.booking;
 
+import com.batowka.guestbooking.calendar.BlockedPeriodRepository;
+import com.batowka.guestbooking.common.DatesLock;
 import com.batowka.guestbooking.messaging.OutboxWriter;
 import com.batowka.guestbooking.otp.OtpService;
 import com.batowka.guestbooking.user.UserAccount;
@@ -21,7 +23,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class BookingService {
 
-    static final ZoneId JST = ZoneId.of("Asia/Tokyo");
+    public static final ZoneId JST = ZoneId.of("Asia/Tokyo");
     static final List<BookingStatus> ACTIVE =
             List.of(BookingStatus.PENDING_OTP, BookingStatus.CONFIRMED);
 
@@ -30,6 +32,8 @@ public class BookingService {
     private final OtpService otp;
     private final JdbcTemplate jdbc;
     private final OutboxWriter outbox;
+    private final DatesLock datesLock;
+    private final BlockedPeriodRepository blockedPeriods;
 
     public record WillReplace(long id, LocalDate checkIn, LocalDate checkOut) {
     }
@@ -47,6 +51,11 @@ public class BookingService {
                 .anyMatch(b -> b.getUser().getId().equals(userId));
         if (overlapsOwn) {
             throw new OverlapsOwnBookingException();
+        }
+        datesLock.acquire();
+        // блокировки админа: exclusion constraint их не видит, проверяем кодом под замком
+        if (!blockedPeriods.findOverlapping(checkIn, checkOut.minusDays(1)).isEmpty()) {
+            throw new DatesTakenException();
         }
         Long bookingId;
         try {
@@ -160,6 +169,10 @@ public class BookingService {
     private void applyReschedule(UserAccount user, long bookingId, JsonNode payload) {
         LocalDate in = LocalDate.parse(payload.get("check_in").asString());
         LocalDate out = LocalDate.parse(payload.get("check_out").asString());
+        datesLock.acquire();
+        if (!blockedPeriods.findOverlapping(in, out.minusDays(1)).isEmpty()) {
+            throw new DatesTakenException();
+        }
         int updated;
         try {
             updated = jdbc.update("""
