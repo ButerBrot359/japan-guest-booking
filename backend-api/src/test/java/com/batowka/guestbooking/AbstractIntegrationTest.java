@@ -49,7 +49,7 @@ public abstract class AbstractIntegrationTest {
     void cleanDatabase() {
         jdbcTemplate.execute("""
                 TRUNCATE TABLE bookings, blocked_periods, otp_challenges,
-                    access_requests, outbox, processed_events, users
+                    access_requests, outbox, processed_events, user_greetings, users
                     RESTART IDENTITY CASCADE
                 """);
         adminSeeder.ifAvailable(com.batowka.guestbooking.auth.AdminSeeder::seed);

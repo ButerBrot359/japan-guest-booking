@@ -38,6 +38,6 @@ public class MeController {
                 .map(b -> new ActiveBooking(b.getId(), b.getCheckIn(), b.getCheckOut(), b.getStatus()))
                 .orElse(null);
         return new MeResponse(user.getPhone(), user.getName(), user.getRole(),
-                user.getTelegramChatId() != null, user.getGreeting(), activeBooking);
+                user.getTelegramChatId() != null, null /* Task 4 вернёт случайное приветствие */, activeBooking);
     }
 }

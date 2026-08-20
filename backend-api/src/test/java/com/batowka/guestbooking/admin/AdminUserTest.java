@@ -92,36 +92,6 @@ class AdminUserTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void patchSetsAndClearsGreeting() throws Exception {
-        Long id = jdbc.queryForObject(
-                "insert into users(phone, name) values ('+81311100005', 'Миша') returning id", Long.class);
-
-        mvc.perform(patch("/api/admin/users/" + id).cookie(adminAuth())
-                        .contentType(APPLICATION_JSON)
-                        .content("{\"greeting\": \"Мишаня! Футон проветрен\"}"))
-                .andExpect(status().isNoContent());
-        assertThat(jdbc.queryForObject(
-                "select greeting from users where id = " + id, String.class))
-                .isEqualTo("Мишаня! Футон проветрен");
-
-        mvc.perform(patch("/api/admin/users/" + id).cookie(adminAuth())
-                        .contentType(APPLICATION_JSON).content("{\"greeting\": null}"))
-                .andExpect(status().isNoContent());
-        assertThat(jdbc.queryForObject(
-                "select greeting from users where id = " + id, String.class)).isNull();
-    }
-
-    @Test
-    void patchDeletedUserGives404() throws Exception {
-        Long id = jdbc.queryForObject(
-                "insert into users(phone, name, deleted_at) values ('+81311100006', 'Бывший', now()) returning id",
-                Long.class);
-        mvc.perform(patch("/api/admin/users/" + id).cookie(adminAuth())
-                        .contentType(APPLICATION_JSON).content("{\"greeting\": \"x\"}"))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
     void reAddingDeletedReactivatesWithHistory() throws Exception {
         Long id = jdbc.queryForObject(
                 "insert into users(phone, name, deleted_at) values ('+81311100004', 'Бывший', now()) returning id",

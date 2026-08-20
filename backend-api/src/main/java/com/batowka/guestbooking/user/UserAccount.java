@@ -39,7 +39,4 @@ public class UserAccount {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
-
-    @Column(length = 300)
-    private String greeting;
 }
