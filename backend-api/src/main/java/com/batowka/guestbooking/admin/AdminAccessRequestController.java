@@ -1,6 +1,5 @@
 package com.batowka.guestbooking.admin;
 
-import com.batowka.guestbooking.accessrequest.AccessRequest;
 import com.batowka.guestbooking.accessrequest.AccessRequestService;
 import com.batowka.guestbooking.accessrequest.AccessRequestStatus;
 import lombok.RequiredArgsConstructor;

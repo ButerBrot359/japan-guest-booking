@@ -95,4 +95,24 @@ class AdminBookingTest extends AbstractIntegrationTest {
         mvc.perform(post("/api/admin/bookings/999999/cancel").cookie(adminAuth()))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    void adminCanCancelBookingOfGuestWithoutTelegram() throws Exception {
+        // гость без telegram_chat_id (как после softDelete) с прошедшей CONFIRMED-бронью:
+        // отменить некому уведомить гостя, но админское уведомление должно уйти, а не 500
+        Long userId = jdbc.queryForObject(
+                "insert into users(phone, name, telegram_chat_id) values ('+81380000005', 'Без TG', null) returning id",
+                Long.class);
+        long id = jdbc.queryForObject("""
+                insert into bookings(user_id, check_in, check_out, status)
+                values (?, '2026-01-10'::date, '2026-01-15'::date, 'CONFIRMED') returning id
+                """, Long.class, userId);
+
+        mvc.perform(post("/api/admin/bookings/" + id + "/cancel").cookie(adminAuth()))
+                .andExpect(status().isNoContent());
+
+        assertThat(jdbc.queryForObject(
+                "select status || ':' || cancelled_by from bookings where id = " + id, String.class))
+                .isEqualTo("CANCELLED:ADMIN");
+    }
 }

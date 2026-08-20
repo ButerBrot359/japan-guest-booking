@@ -63,6 +63,7 @@ class DatesRaceTest extends AbstractIntegrationTest {
             Integer blocks = jdbc.queryForObject(
                     "select count(*) from blocked_periods", Integer.class);
             assertThat(booked && blocked).as("обе стороны выиграли гонку").isFalse();
+            assertThat(booked || blocked).as("хотя бы одна сторона должна была успеть").isTrue();
             assertThat((bookings != null && bookings > 0) && (blocks != null && blocks > 0)).isFalse();
         } finally {
             pool.shutdownNow();

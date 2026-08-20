@@ -7,7 +7,6 @@ import com.batowka.guestbooking.user.AlreadyMemberException;
 import com.batowka.guestbooking.user.UserAccountRepository;
 import com.batowka.guestbooking.user.WhitelistService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,20 +31,18 @@ public class AccessRequestService {
         if (users.findByPhoneAndDeletedAtIsNull(phone).isPresent()) {
             throw new AlreadyMemberException();
         }
-        if (requests.existsByPhoneAndStatus(phone, AccessRequestStatus.PENDING)) {
-            return; // заявка уже ждёт решения — не плодим и не спамим админа
-        }
-        AccessRequest r = new AccessRequest();
-        r.setPhone(phone);
-        r.setName(name);
-        r.setMessage(message);
-        try {
-            requests.saveAndFlush(r);
-        } catch (DataIntegrityViolationException e) {
-            // проиграли гонку с параллельным POST на тот же телефон (частичный уникальный
-            // индекс на PENDING) — проигравший гонку получает тот же идемпотентный успех,
-            // что и повтор; событие уже отправил победитель, второй раз слать не нужно
-            return;
+        // saveAndFlush+catch тут не работает: JPA-эксепшен при flush метит транзакцию
+        // rollback-only на уровне Hibernate ещё ДО catch — commit падает с
+        // UnexpectedRollbackException независимо от пойманного исключения. Поэтому
+        // upsert без исключений: проигравший гонку и повторная заявка — один и тот же
+        // идемпотентный путь, вставка молча не происходит, событие не пишется.
+        Integer inserted = jdbc.update("""
+                insert into access_requests(phone, name, message)
+                values (?, ?, ?)
+                on conflict (phone) where status = 'PENDING' do nothing
+                """, phone, name, message);
+        if (inserted == 0) {
+            return; // заявка уже ждёт решения (или проиграна гонка) — не плодим и не спамим админа
         }
         // уведомление админу той же транзакцией; без привязанного TG — просто некому слать
         jdbc.query("""

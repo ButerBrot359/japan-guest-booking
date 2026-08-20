@@ -8,6 +8,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.concurrent.*;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -20,6 +22,7 @@ class SubmitAccessRequestTest extends AbstractIntegrationTest {
 
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
+    @Autowired AccessRequestService service;
 
     private static final String BODY =
             "{\"phone\": \"+81313300001\", \"name\": \"Незнакомец\", \"message\": \"друг Миши\"}";
@@ -83,6 +86,34 @@ class SubmitAccessRequestTest extends AbstractIntegrationTest {
                 insert into access_requests(phone, name, status) values (?, ?, 'PENDING')
                 """, "+81313300003", "Второй"))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void concurrentSubmitsForSamePhoneNeitherFails() throws Exception {
+        // проигравший гонку (TOCTOU: оба прошли pre-check «нет PENDING», оба
+        // пытаются вставить) не должен получать 500 из-за rollback-only
+        // транзакции после saveAndFlush+catch — оба вызова обязаны завершиться
+        // без исключений, а запись в базе должна остаться ровно одна
+        String phone = "+81313309001";
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            Callable<Void> submit = () -> {
+                start.await();
+                service.submit(phone, "Гонщик", null);
+                return null;
+            };
+            Future<Void> f1 = pool.submit(submit);
+            Future<Void> f2 = pool.submit(submit);
+            start.countDown();
+            f1.get(30, TimeUnit.SECONDS);
+            f2.get(30, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(jdbc.queryForObject(
+                "select count(*) from access_requests where phone = ?", Integer.class, phone))
+                .isEqualTo(1);
     }
 
     @Test

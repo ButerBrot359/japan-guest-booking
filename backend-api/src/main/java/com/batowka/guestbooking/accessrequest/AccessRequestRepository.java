@@ -6,7 +6,5 @@ import java.util.List;
 
 public interface AccessRequestRepository extends JpaRepository<AccessRequest, Long> {
 
-    boolean existsByPhoneAndStatus(String phone, AccessRequestStatus status);
-
     List<AccessRequest> findAllByStatusOrderByIdDesc(AccessRequestStatus status);
 }

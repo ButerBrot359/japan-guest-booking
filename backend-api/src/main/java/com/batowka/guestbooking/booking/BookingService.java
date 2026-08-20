@@ -230,7 +230,12 @@ public class BookingService {
     /** Событие гостю + админу (если у админа привязан Telegram). by: GUEST | ADMIN. */
     void notifyBookingEvent(UserAccount guest, String eventType,
                             LocalDate checkIn, LocalDate checkOut, String by) {
-        outboxEvent(guest.getTelegramChatId(), guest, eventType, checkIn, checkOut, by);
+        // гость без Telegram (например, soft-удалённый — WhitelistService.softDelete
+        // обнуляет telegram_chat_id) — событие некому слать, но админское уведомление
+        // всё равно должно уйти
+        if (guest.getTelegramChatId() != null) {
+            outboxEvent(guest.getTelegramChatId(), guest, eventType, checkIn, checkOut, by);
+        }
         jdbc.query("""
                 select telegram_chat_id from users
                 where role = 'ADMIN' and telegram_chat_id is not null
