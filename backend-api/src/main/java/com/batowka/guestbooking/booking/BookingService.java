@@ -322,8 +322,18 @@ public class BookingService {
         users.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
                 .orElseThrow(UserGoneException::new);
-        Booking active = activeBooking(userId).orElseThrow(BookingNotFoundException::new);
+        completePastBooking(userId);
+        Booking active = bookings.findFirstByUserIdAndStatusOrderByIdDesc(userId, BookingStatus.CONFIRMED)
+                .or(() -> bookings.findFirstByUserIdAndStatusOrderByIdDesc(
+                        userId, BookingStatus.PENDING_OTP))
+                .orElseThrow(BookingNotFoundException::new);
         String normalized = (comment == null || comment.isBlank()) ? null : comment.trim();
-        jdbc.update("update bookings set comment = ? where id = ?", normalized, active.getId());
+        // Атомарный условный UPDATE (урок этапа 5) — не exists-then-update гонка
+        int n = jdbc.update(
+                "update bookings set comment = ? where id = ? and status in ('CONFIRMED', 'PENDING_OTP')",
+                normalized, active.getId());
+        if (n == 0) {
+            throw new BookingNotFoundException();
+        }
     }
 }
