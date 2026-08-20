@@ -1,10 +1,23 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
+import { afterEach, beforeEach, vi } from 'vitest'
 import { mockState } from './test/handlers'
 import { server } from './test/setup'
 import App from './App'
+
+beforeEach(() => {
+  // фиксируем дату — дизейбл прошедших дней не должен зависеть от дня запуска CI
+  // (иначе пары дней 10/13 и 11/14 «на грани» ломают клики флоу-тестов).
+  // 03:00Z = полдень JST, безопасно от границ суток
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  vi.setSystemTime(new Date('2026-09-01T03:00:00Z'))
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 function renderApp() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -23,17 +36,27 @@ function loginAs(me: Partial<typeof mockState.me>) {
   } as NonNullable<typeof mockState.me>
 }
 
-async function clickFreeDay(dayNum: string) {
-  // тот же номер дня встречается в обоих отрисованных месяцах — прошедшие дни
-  // задизейблены, а до загрузки /api/me задизейблено вообще всё. Ждём (с ретраями),
-  // пока не появится кликабельная кнопка с нужным номером — это и есть будущий месяц.
-  const target = await waitFor(() => {
-    const btn = screen.getAllByRole('button', { name: /свободно/ })
-      .find((b) => b.textContent === dayNum && !b.hasAttribute('disabled'))
-    if (!btn) throw new Error(`день ${dayNum} пока недоступен для выбора`)
-    return btn
+// Оба номера дня пары (чек-ин/чек-аут) встречаются в обоих отрисованных месяцах,
+// а до загрузки /api/me задизейблено вообще всё. Если искать каждый день по
+// отдельности «первым кликабельным совпадением», пара может расползтись по
+// разным месяцам (например «10» из будущего месяца, а «13» — из текущего,
+// потому что текущий уже не задизейблен на этот номер) — получим невалидный
+// чек-аут раньше чек-ина. Поэтому ищем ОДИН месяц, где кликабельны ОБА дня
+// пары, и кликаем их там по очереди — с ретраями до загрузки /api/me.
+async function clickFreeDayPair([first, second]: [string, string]) {
+  const [firstBtn, secondBtn] = await waitFor(() => {
+    const months = screen.getAllByText(/^[А-ЯЁ][а-яё]+ \d{4}$/)
+      .map((title) => title.closest('.mb-4')).filter((el): el is HTMLElement => el != null)
+    for (const month of months) {
+      const buttons = within(month).getAllByRole('button', { name: /свободно/ })
+      const a = buttons.find((b) => b.textContent === first && !b.hasAttribute('disabled'))
+      const b = buttons.find((b) => b.textContent === second && !b.hasAttribute('disabled'))
+      if (a && b) return [a, b] as const
+    }
+    throw new Error(`пара дней ${first}/${second} пока недоступна целиком ни в одном месяце`)
   })
-  await userEvent.click(target)
+  await userEvent.click(firstBtn)
+  await userEvent.click(secondBtn)
 }
 
 test('полный create-флоу: выбор дат → шторка → OTP → подтверждена', async () => {
@@ -42,8 +65,7 @@ test('полный create-флоу: выбор дат → шторка → OTP �
   renderApp()
   await screen.findByText(/Привет, Маша!/)
 
-  await clickFreeDay('10')
-  await clickFreeDay('13')
+  await clickFreeDayPair(['10', '13'])
   await userEvent.click(screen.getByRole('button', { name: 'Забронировать' }))
 
   await userEvent.type(await screen.findByLabelText('Код из Telegram'), '471523')
@@ -76,8 +98,7 @@ test('полный reschedule-флоу: перенос → новые даты �
   renderApp()
 
   await userEvent.click(await screen.findByRole('button', { name: 'Перенести' }))
-  await clickFreeDay('11')
-  await clickFreeDay('14')
+  await clickFreeDayPair(['11', '14'])
   await userEvent.click(screen.getByRole('button', { name: 'Забронировать' }))
 
   expect(await screen.findByText(/перенос/)).toBeInTheDocument()
@@ -94,15 +115,13 @@ test('смена режима сбрасывает устаревшую ошиб
     HttpResponse.json({ code: 'DATES_TAKEN', message: '' }, { status: 409 })))
   renderApp()
 
-  await clickFreeDay('10')
-  await clickFreeDay('13')
+  await clickFreeDayPair(['10', '13'])
   await userEvent.click(screen.getByRole('button', { name: 'Забронировать' }))
   expect(await screen.findByText(/только что заняли/)).toBeInTheDocument()
 
   await userEvent.click(screen.getByRole('button', { name: 'Перенести' }))
   // в режиме переноса выбираем новые даты — селекшен снова непустой, флоу вернётся в idle
-  await clickFreeDay('11')
-  await clickFreeDay('14')
+  await clickFreeDayPair(['11', '14'])
   await userEvent.click(screen.getByRole('button', { name: 'Передумал' }))
 
   expect(screen.queryByText(/только что заняли/)).not.toBeInTheDocument()
