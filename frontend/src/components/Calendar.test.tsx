@@ -54,3 +54,11 @@ test('выбранный диапазон подсвечен', () => {
   expect(screen.getByRole('button', { name: /10 сентября/i })).toHaveAttribute('data-selected', 'true')
   expect(screen.getByRole('button', { name: /12 сентября/i })).toHaveAttribute('data-selected', 'true')
 })
+
+test('день из checkoutCandidates кликабелен несмотря на статус', async () => {
+  const onPick = vi.fn()
+  render(<Calendar {...base} onPick={onPick} checkoutCandidates={new Set(['2026-09-13'])}
+    days={daysMap([{ date: '2026-09-13', status: 'BOOKED', guestName: 'Петя' }])} />)
+  await userEvent.click(screen.getByRole('button', { name: /13 сентября/i }))
+  expect(onPick).toHaveBeenCalledWith('2026-09-13')
+})

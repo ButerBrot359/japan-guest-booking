@@ -13,6 +13,8 @@ interface CalendarProps {
   selectable: boolean
   onShiftMonth: (delta: 1 | -1) => void
   onPick: (dayIso: string) => void
+  /** Дни, кликабельные как выезд, даже если статус не FREE (полуинтервал) */
+  checkoutCandidates?: Set<string>
 }
 
 const WEEKDAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
@@ -27,9 +29,9 @@ function ariaLabel(iso: string, day: CalendarDay | undefined): string {
   return `${date}, свободно`
 }
 
-function Month({ start, days, selection, selectable, onPick }: {
+function Month({ start, days, selection, selectable, onPick, checkoutCandidates }: {
   start: string
-} & Pick<CalendarProps, 'days' | 'selection' | 'selectable' | 'onPick'>) {
+} & Pick<CalendarProps, 'days' | 'selection' | 'selectable' | 'onPick' | 'checkoutCandidates'>) {
   const selected = new Set(
     selection.checkIn && selection.checkOut
       ? isoRange(selection.checkIn, selection.checkOut)
@@ -46,7 +48,7 @@ function Month({ start, days, selection, selectable, onPick }: {
           if (!iso) return <div key={i} />
           const day = days.get(iso)
           const status = day?.status ?? 'FREE'
-          const disabled = !selectable || status !== 'FREE'
+          const disabled = !selectable || (status !== 'FREE' && !checkoutCandidates?.has(iso))
           return (
             <button
               key={iso}

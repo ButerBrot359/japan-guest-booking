@@ -3,7 +3,8 @@ import { useCalendar, useMe } from './api/queries'
 import { Calendar, type Selection } from './components/Calendar'
 import { LoginCard } from './components/LoginCard'
 import { ProfileCard } from './components/ProfileCard'
-import { addMonths, todayIso } from './lib/dates'
+import { addMonths, isoRange, todayIso } from './lib/dates'
+import { pickDay } from './lib/selection'
 
 export default function App() {
   const [monthStart, setMonthStart] = useState(todayIso().slice(0, 7) + '-01')
@@ -11,6 +12,16 @@ export default function App() {
   const me = useMe()
   const calendar = useCalendar(monthStart, addMonths(monthStart, 2))
   const days = new Map((calendar.data?.days ?? []).map((d) => [d.date, d]))
+
+  // при выбранном заезде — ближайший не-FREE день после него разрешён как выезд (полуинтервал)
+  const checkoutCandidates = (() => {
+    if (!selection.checkIn || selection.checkOut) return undefined
+    for (const iso of isoRange(selection.checkIn, addMonths(monthStart, 2))) {
+      if (iso > selection.checkIn && (days.get(iso)?.status ?? 'FREE') !== 'FREE')
+        return new Set([iso])
+    }
+    return undefined
+  })()
 
   return (
     <div className="mx-auto max-w-md min-h-screen bg-paper px-4 py-5">
@@ -33,9 +44,10 @@ export default function App() {
         monthStart={monthStart}
         days={days}
         selection={selection}
-        selectable={false}
+        selectable={me.data != null}
         onShiftMonth={(d) => setMonthStart((m) => addMonths(m, d))}
-        onPick={() => setSelection(selection)}
+        onPick={(d) => setSelection((s) => pickDay(s, d, days))}
+        checkoutCandidates={checkoutCandidates}
       />
     </div>
   )
