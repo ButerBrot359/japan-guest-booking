@@ -1,5 +1,7 @@
 package com.batowka.guestbooking.common;
 
+import com.batowka.guestbooking.accessrequest.AccessRequestNotFoundException;
+import com.batowka.guestbooking.accessrequest.AlreadyResolvedException;
 import com.batowka.guestbooking.auth.InvalidCredentialsException;
 import com.batowka.guestbooking.auth.InvalidPhoneException;
 import com.batowka.guestbooking.auth.RateLimitExceededException;
@@ -214,6 +216,18 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     public ApiError cannotDeleteAdmin(CannotDeleteAdminException ex) {
         return new ApiError("CANNOT_DELETE_ADMIN", ex.getMessage());
+    }
+
+    @ExceptionHandler(AccessRequestNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiError accessRequestNotFound(AccessRequestNotFoundException ex) {
+        return new ApiError("NOT_FOUND", ex.getMessage());
+    }
+
+    @ExceptionHandler(AlreadyResolvedException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiError alreadyResolved(AlreadyResolvedException ex) {
+        return new ApiError("ALREADY_RESOLVED", ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

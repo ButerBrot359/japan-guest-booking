@@ -5,12 +5,14 @@ import com.batowka.guestbooking.auth.Phones;
 import com.batowka.guestbooking.messaging.OutboxWriter;
 import com.batowka.guestbooking.user.AlreadyMemberException;
 import com.batowka.guestbooking.user.UserAccountRepository;
+import com.batowka.guestbooking.user.WhitelistService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.util.Map;
 
 @Service
@@ -21,6 +23,8 @@ public class AccessRequestService {
     private final UserAccountRepository users;
     private final OutboxWriter outbox;
     private final JdbcTemplate jdbc;
+    private final WhitelistService whitelist;
+    private final Clock clock;
 
     @Transactional
     public void submit(String rawPhone, String name, String message) {
@@ -54,5 +58,37 @@ public class AccessRequestService {
                     "phone", phone,
                     "message", message == null ? "" : message));
         });
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<AccessRequest> list(AccessRequestStatus status) {
+        return requests.findAllByStatusOrderByIdDesc(status);
+    }
+
+    /** Одобрение: заявка APPROVED + человек в белом списке (создание или реактивация). */
+    @Transactional
+    public void approve(long id) {
+        AccessRequest r = resolve(id, AccessRequestStatus.APPROVED);
+        boolean live = users.findByPhoneAndDeletedAtIsNull(r.getPhone()).isPresent();
+        if (!live) {
+            whitelist.addNormalized(r.getPhone(), r.getName());
+        }
+        // уведомления новичку нет: его TG неизвестен — владелец скажет сам (спека §4)
+    }
+
+    @Transactional
+    public void reject(long id) {
+        resolve(id, AccessRequestStatus.REJECTED);
+    }
+
+    private AccessRequest resolve(long id, AccessRequestStatus target) {
+        AccessRequest r = requests.findById(id)
+                .orElseThrow(AccessRequestNotFoundException::new);
+        if (r.getStatus() != AccessRequestStatus.PENDING) {
+            throw new AlreadyResolvedException();
+        }
+        r.setStatus(target);
+        r.setResolvedAt(clock.instant());
+        return requests.save(r);
     }
 }
