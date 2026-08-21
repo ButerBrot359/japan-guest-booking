@@ -47,18 +47,18 @@ class BookingRepositoryTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void checkoutDayDoesNotCountAsOccupied() {
+    void checkoutDayCountsAsOccupied() {
         Long masha = createUser("+81200000003", "Маша");
         jdbc.update("""
                 insert into bookings(user_id, check_in, check_out, status)
                 values (?, '2026-11-01', '2026-11-05', 'CONFIRMED')
                 """, masha);
 
-        // диапазон начинается в день выезда — бронь уже не занимает эти дни
+        // диапазон начинается в день выезда — бронь занимает [checkIn, checkOut] включительно (V8)
         List<Booking> found = bookings.findOverlapping(
                 LocalDate.parse("2026-11-05"), LocalDate.parse("2026-11-30"),
                 List.of(BookingStatus.CONFIRMED));
 
-        assertThat(found).isEmpty();
+        assertThat(found).hasSize(1);
     }
 }

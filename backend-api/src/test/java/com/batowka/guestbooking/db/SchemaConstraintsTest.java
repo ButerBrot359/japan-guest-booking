@@ -33,20 +33,34 @@ class SchemaConstraintsTest extends AbstractIntegrationTest {
         Long petya = createUser("+81100000002");
         createBooking(masha, "2026-10-10", "2026-10-15", "CONFIRMED");
 
+        // PENDING_OTP как отдельный статус брони упразднён (этап 6.6) — exclusion constraint
+        // теперь охватывает только CONFIRMED
         assertThatThrownBy(() ->
-                createBooking(petya, "2026-10-12", "2026-10-20", "PENDING_OTP"))
+                createBooking(petya, "2026-10-12", "2026-10-20", "CONFIRMED"))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
-    void backToBackBookingsAreAllowed() {
+    void backToBackBookingsAreRejected() {
         Long masha = createUser("+81100000003");
         Long petya = createUser("+81100000004");
         createBooking(masha, "2026-11-01", "2026-11-05", "CONFIRMED");
 
-        // выезд 5-го и заезд 5-го не конфликтуют: [check_in, check_out)
-        assertThatCode(() ->
+        // день выезда занят (V8): [check_in, check_out] включительно — заезд 5-го конфликтует
+        assertThatThrownBy(() ->
                 createBooking(petya, "2026-11-05", "2026-11-08", "CONFIRMED"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void bookingStartingDayAfterCheckoutIsAllowed() {
+        Long masha = createUser("+81100000009");
+        Long petya = createUser("+81100000010");
+        createBooking(masha, "2026-11-01", "2026-11-05", "CONFIRMED");
+
+        // день после выезда свободен
+        assertThatCode(() ->
+                createBooking(petya, "2026-11-06", "2026-11-08", "CONFIRMED"))
                 .doesNotThrowAnyException();
     }
 

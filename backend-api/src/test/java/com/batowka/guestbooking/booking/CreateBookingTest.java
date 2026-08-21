@@ -105,6 +105,22 @@ class CreateBookingTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void checkoutDayIsTakenForNextGuest() throws Exception {
+        Long masha = guest("+81320000005", 777105L);
+        Long petya = guest("+81320000006", 777106L);
+        jdbc.update("""
+                insert into bookings(user_id, check_in, check_out, status)
+                values (?, '2027-07-01', '2027-07-05', 'CONFIRMED')
+                """, masha);
+
+        // заезд в день выезда предыдущего гостя запрещён (решение владельца, этап 6.6)
+        mvc.perform(post("/api/bookings").cookie(auth(petya))
+                        .contentType(APPLICATION_JSON).content(body("2027-07-05", "2027-07-08")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DATES_TAKEN"));
+    }
+
+    @Test
     void pastOrInvertedDatesGive400() throws Exception {
         Long id = guest("+81320000007", 777107L);
 

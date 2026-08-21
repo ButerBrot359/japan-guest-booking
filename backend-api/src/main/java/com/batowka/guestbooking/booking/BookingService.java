@@ -61,7 +61,7 @@ public class BookingService {
         validateDates(checkIn, checkOut);
         datesLock.acquire();
         // блокировки админа: exclusion constraint их не видит, проверяем кодом под замком
-        if (!blockedPeriods.findOverlapping(checkIn, checkOut.minusDays(1)).isEmpty()) {
+        if (!blockedPeriods.findOverlapping(checkIn, checkOut).isEmpty()) {
             throw new DatesTakenException();
         }
         // сначала отмена старой CONFIRMED: освобождает частичный уникальный индекс
@@ -130,7 +130,7 @@ public class BookingService {
         requireOwnership(bookingId, userId);
         validateDates(checkIn, checkOut);
         datesLock.acquire();
-        if (!blockedPeriods.findOverlapping(checkIn, checkOut.minusDays(1)).isEmpty()) {
+        if (!blockedPeriods.findOverlapping(checkIn, checkOut).isEmpty()) {
             throw new DatesTakenException();
         }
         int updated;

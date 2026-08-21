@@ -30,8 +30,8 @@ public class BlockedPeriodService {
             throw new InvalidCalendarRangeException("Конец периода раньше начала");
         }
         datesLock.acquire();
-        // бронь занимает [checkIn, checkOut), блокировка — включительно:
-        // findOverlapping(from=start, to=end) отдаёт checkIn <= end && checkOut > start
+        // бронь занимает [checkIn, checkOut] включительно (V8), блокировка — включительно:
+        // конфликт, если checkIn <= end && checkOut >= start
         List<OverlapsBookingException.Conflict> conflicts = bookings
                 .findOverlapping(startDate, endDate, BookingService.ACTIVE).stream()
                 .map(b -> new OverlapsBookingException.Conflict(

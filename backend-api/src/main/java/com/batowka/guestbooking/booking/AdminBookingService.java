@@ -57,7 +57,7 @@ public class AdminBookingService {
             throw new InvalidBookingDatesException();
         }
         datesLock.acquire();
-        if (!blockedPeriods.findOverlapping(checkIn, checkOut.minusDays(1)).isEmpty()) {
+        if (!blockedPeriods.findOverlapping(checkIn, checkOut).isEmpty()) {
             throw new DatesTakenException();
         }
         int updated;

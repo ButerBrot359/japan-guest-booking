@@ -13,13 +13,13 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     /**
      * Брони, пересекающие диапазон дней [from, to] включительно.
-     * Бронь занимает [checkIn, checkOut), поэтому: checkIn <= to и checkOut > from.
+     * Бронь занимает [checkIn, checkOut] ВКЛЮЧИТЕЛЬНО (V8): checkIn <= to и checkOut >= from.
      */
     @Query("""
             select b from Booking b join fetch b.user
             where b.status in :statuses
               and b.checkIn <= :to
-              and b.checkOut > :from
+              and b.checkOut >= :from
             """)
     List<Booking> findOverlapping(@Param("from") LocalDate from,
                                   @Param("to") LocalDate to,

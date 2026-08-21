@@ -63,8 +63,9 @@ class CalendarServiceTest extends AbstractIntegrationTest {
         assertThat(map.get(LocalDate.parse("2026-10-10")).status()).isEqualTo(DayStatus.BOOKED);
         assertThat(map.get(LocalDate.parse("2026-10-10")).guestName()).isEqualTo("Маша");
         assertThat(map.get(LocalDate.parse("2026-10-11")).status()).isEqualTo(DayStatus.BOOKED);
-        // день выезда свободен: [check_in, check_out)
-        assertThat(map.get(LocalDate.parse("2026-10-12")).status()).isEqualTo(DayStatus.FREE);
+        // день выезда занят (V8): [check_in, check_out] включительно
+        assertThat(map.get(LocalDate.parse("2026-10-12")).status()).isEqualTo(DayStatus.BOOKED);
+        assertThat(map.get(LocalDate.parse("2026-10-13")).status()).isEqualTo(DayStatus.FREE);
         // блокировка включительно с обеих сторон
         assertThat(map.get(LocalDate.parse("2026-10-20")).status()).isEqualTo(DayStatus.BLOCKED);
         assertThat(map.get(LocalDate.parse("2026-10-21")).status()).isEqualTo(DayStatus.BLOCKED);
@@ -105,6 +106,18 @@ class CalendarServiceTest extends AbstractIntegrationTest {
         assertThatThrownBy(() -> calendar.getCalendar(
                 LocalDate.parse("2026-01-01"), LocalDate.parse("2028-01-01"), null))
                 .isInstanceOf(InvalidCalendarRangeException.class);
+    }
+
+    @Test
+    void checkoutDayIsPaintedBooked() {
+        // бронь 2027-07-01 → 2027-07-05: заняты все дни ВКЛЮЧАЯ 5-е (V8)
+        givenBooking("+81300000005", "Гриша", "2027-07-01", "2027-07-05", "CONFIRMED");
+
+        List<CalendarDay> days = calendar.getCalendar(
+                LocalDate.parse("2027-07-01"), LocalDate.parse("2027-07-06"), null);
+
+        assertThat(days.get(4).status()).isEqualTo(DayStatus.BOOKED); // 5-е июля
+        assertThat(days.get(5).status()).isEqualTo(DayStatus.FREE);   // 6-е свободно
     }
 
     @Test

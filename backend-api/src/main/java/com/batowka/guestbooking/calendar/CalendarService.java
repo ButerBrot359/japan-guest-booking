@@ -53,7 +53,7 @@ public class CalendarService {
                     ? b.getUser().getName() : null;
             LocalDate start = b.getCheckIn().isBefore(from) ? from : b.getCheckIn();
             for (LocalDate d = start;
-                 d.isBefore(b.getCheckOut()) && !d.isAfter(to);
+                 !d.isAfter(b.getCheckOut()) && !d.isAfter(to);
                  d = d.plusDays(1)) {
                 days.put(d, new CalendarDay(d, DayStatus.BOOKED, name, mine));
             }
