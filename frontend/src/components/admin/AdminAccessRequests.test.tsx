@@ -12,11 +12,12 @@ function renderSection() {
 
 test('показывает ожидающие заявки', async () => {
   mockState.accessRequests = [
-    { id: 1, phone: '+79990000001', name: 'Незнакомец', message: 'друг Миши', status: 'PENDING', createdAt: 'x', resolvedAt: null },
+    { id: 1, phone: '+79990000001', name: 'Незнакомец', message: 'друг Миши', status: 'PENDING', createdAt: '2026-08-10T12:00:00Z', resolvedAt: null },
   ]
   renderSection()
   expect(await screen.findByText(/Незнакомец/)).toBeInTheDocument()
   expect(screen.getByText(/друг Миши/)).toBeInTheDocument()
+  expect(screen.getByText(new Date('2026-08-10T12:00:00Z').toLocaleDateString('ru-RU'))).toBeInTheDocument()
 })
 
 test('кнопка Добавить убирает заявку из ожидающих', async () => {
@@ -30,9 +31,10 @@ test('кнопка Добавить убирает заявку из ожида�
 
 test('переключение на Историю показывает одобренные', async () => {
   mockState.accessRequests = [
-    { id: 2, phone: '+7', name: 'Одобренный', message: null, status: 'APPROVED', createdAt: 'x', resolvedAt: 'y' },
+    { id: 2, phone: '+7', name: 'Одобренный', message: null, status: 'APPROVED', createdAt: '2026-08-10T12:00:00Z', resolvedAt: '2026-08-11T12:00:00Z' },
   ]
   renderSection()
   await userEvent.click(screen.getByRole('button', { name: 'История' }))
   expect(await screen.findByText(/Одобренный/)).toBeInTheDocument()
+  expect(screen.getByText(new RegExp(new Date('2026-08-11T12:00:00Z').toLocaleDateString('ru-RU')))).toBeInTheDocument()
 })

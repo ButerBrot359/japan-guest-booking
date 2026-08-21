@@ -32,7 +32,7 @@ class UserGreetingMigrationTest extends AbstractIntegrationTest {
         g.setUserId(userId);
         g.setText("Привет, солнце!");
         greetings.save(g);
-        assertThat(greetings.findByUserId(userId)).hasSize(1);
+        assertThat(greetings.findByUserIdOrderByIdAsc(userId)).hasSize(1);
     }
 
     @Test

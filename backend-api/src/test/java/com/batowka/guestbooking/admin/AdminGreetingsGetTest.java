@@ -56,4 +56,13 @@ class AdminGreetingsGetTest extends AbstractIntegrationTest {
         mvc.perform(get("/api/admin/users/1/greetings"))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    void friendCookieGets403() throws Exception {
+        long id = guest("+81350000003");
+        Cookie friendAuth = new Cookie(JwtAuthFilter.COOKIE_NAME, jwt.issue(id, Role.FRIEND));
+
+        mvc.perform(get("/api/admin/users/" + id + "/greetings").cookie(friendAuth))
+                .andExpect(status().isForbidden());
+    }
 }

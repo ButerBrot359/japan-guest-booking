@@ -101,7 +101,7 @@ public class WhitelistService {
     /** Список текущих приветствий гостя в порядке хранения. */
     @Transactional(readOnly = true)
     public List<String> greetings(long id) {
-        return greetingRepo.findByUserId(id).stream()
+        return greetingRepo.findByUserIdOrderByIdAsc(id).stream()
                 .map(UserGreeting::getText)
                 .toList();
     }

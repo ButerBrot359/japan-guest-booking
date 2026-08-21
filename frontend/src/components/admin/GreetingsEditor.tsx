@@ -37,7 +37,7 @@ export function GreetingsEditor({ guestId, onClose }: { guestId: number; onClose
           onClick={() => setLines((ls) => [...ls, ''])}>Добавить строку</button>
         <div className="mt-4 flex gap-2 text-xs">
           <button type="button" className="flex-1 rounded-lg bg-ink py-2 text-paper disabled:opacity-50"
-            disabled={save.isPending}
+            disabled={save.isPending || !current.data}
             onClick={() => save.mutate(
               { id: guestId, greetings: lines.map((l) => l.trim()).filter((l) => l !== '') },
               { onSuccess: onClose },

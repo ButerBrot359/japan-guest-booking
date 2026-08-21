@@ -131,7 +131,12 @@ export function useApproveRequest() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => api.post<void>(`/admin/access-requests/${id}/approve`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'access-requests'] }),
+    // onSettled, а не onSuccess: даже при 409 ALREADY_RESOLVED список должен тихо обновиться.
+    // Одобрение создаёт гостя — обновляем и вкладку «Гости».
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'access-requests'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+    },
   })
 }
 
@@ -139,7 +144,8 @@ export function useRejectRequest() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => api.post<void>(`/admin/access-requests/${id}/reject`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'access-requests'] }),
+    // onSettled, а не onSuccess: даже при 409 ALREADY_RESOLVED список должен тихо обновиться
+    onSettled: () => qc.invalidateQueries({ queryKey: ['admin', 'access-requests'] }),
   })
 }
 

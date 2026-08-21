@@ -40,7 +40,15 @@ export function AdminAccessRequests() {
             <div>
               <div className="font-semibold">{r.name} · {r.phone}</div>
               {r.message && <div className="text-xs text-muted">{r.message}</div>}
-              {view === 'history' && <div className="text-xs text-muted">{RU_STATUS[r.status]}</div>}
+              {view === 'pending' && (
+                <div className="text-xs text-muted">{new Date(r.createdAt).toLocaleDateString('ru-RU')}</div>
+              )}
+              {view === 'history' && (
+                <div className="text-xs text-muted">
+                  {RU_STATUS[r.status]}
+                  {r.resolvedAt && ` · ${new Date(r.resolvedAt).toLocaleDateString('ru-RU')}`}
+                </div>
+              )}
             </div>
             {view === 'pending' && (
               <div className="flex gap-2 text-xs">

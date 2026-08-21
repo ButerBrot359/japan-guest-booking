@@ -17,7 +17,9 @@ export function AdminLoginCard() {
     }
   })
 
-  const failed = login.error instanceof ApiError
+  const apiError = login.error instanceof ApiError ? login.error : null
+  const invalidCredentials = apiError?.code === 'INVALID_CREDENTIALS'
+  const otherError = apiError != null && !invalidCredentials
 
   return (
     <div className="mx-auto mt-16 max-w-sm rounded-3xl bg-paper p-6 shadow-xl">
@@ -53,8 +55,11 @@ export function AdminLoginCard() {
       >
         Войти
       </button>
-      {failed && (
+      {invalidCredentials && (
         <p className="mt-2 text-center text-xs text-hanko">Неверный телефон или пароль</p>
+      )}
+      {otherError && (
+        <p className="mt-2 text-center text-xs text-hanko">Не получилось войти, попробуй ещё раз</p>
       )}
     </div>
   )
