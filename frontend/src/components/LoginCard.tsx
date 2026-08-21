@@ -89,13 +89,17 @@ export function LoginCard() {
           </p>
         )}
         <div className="mt-3 flex items-center justify-between text-xs">
+          {/* tabular-nums: цифры таймера одной ширины — кнопка не дышит каждую
+              секунду и тапы не промахиваются из-за сдвига лейаута */}
           <button
             type="button"
-            className="text-muted disabled:opacity-50"
+            className="text-muted tabular-nums disabled:opacity-50"
             disabled={cooldown > 0 || login.isPending}
             onClick={sendCode}
           >
-            Отправить новый{cooldown > 0 ? ` (0:${String(cooldown).padStart(2, '0')})` : ''}
+            Отправить новый{cooldown > 0
+              ? ` (${Math.floor(cooldown / 60)}:${String(cooldown % 60).padStart(2, '0')})`
+              : ''}
           </button>
           <button type="button" className="text-muted"
             onClick={() => { verify.reset(); login.reset(); setStep('phone') }}>
