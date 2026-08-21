@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/buterbrot359/japan-guest-booking/bot-service/internal/backend"
 	"github.com/buterbrot359/japan-guest-booking/bot-service/internal/kafka"
 	"github.com/buterbrot359/japan-guest-booking/bot-service/internal/telegram"
 )
@@ -31,7 +32,11 @@ func main() {
 	defer producer.Close()
 	consumer := kafka.NewConsumer(brokers, client)
 	defer consumer.Close()
-	poller := telegram.NewPoller(client, producer)
+	backendClient := backend.NewClient(
+		envOr("BACKEND_URL", "http://localhost:8080"),
+		os.Getenv("BOT_API_TOKEN"),
+	)
+	poller := telegram.NewPoller(client, producer, backendClient)
 
 	var wg sync.WaitGroup
 	wg.Add(2)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"time"
+
+	"github.com/buterbrot359/japan-guest-booking/bot-service/internal/backend"
 )
 
 // ContactPublisher — публикация CONTACT_SHARED; реализация — internal/kafka.
@@ -11,17 +13,23 @@ type ContactPublisher interface {
 	PublishContactShared(ctx context.Context, chatID int64, phone, username string) error
 }
 
+// BookingsFetcher — синхронное чтение данных гостя (реализация — internal/backend.Client).
+type BookingsFetcher interface {
+	GetGuestBookings(ctx context.Context, chatID int64) (backend.GuestBookings, error)
+}
+
 type Poller struct {
 	api       API
 	publisher ContactPublisher
+	bookings  BookingsFetcher
 	offset    int64
 	// chat_id → message_id приглашения «поделись контактом»: удаляем его,
 	// когда гость поделился контактом. In-memory, переживает всё кроме рестарта.
 	startInvite map[int64]int64
 }
 
-func NewPoller(api API, publisher ContactPublisher) *Poller {
-	return &Poller{api: api, publisher: publisher, startInvite: make(map[int64]int64)}
+func NewPoller(api API, publisher ContactPublisher, bookings BookingsFetcher) *Poller {
+	return &Poller{api: api, publisher: publisher, bookings: bookings, startInvite: make(map[int64]int64)}
 }
 
 // Run крутит long polling до отмены контекста.
@@ -79,6 +87,10 @@ func (p *Poller) handle(ctx context.Context, u Update) error {
 			return nil
 		}
 		p.startInvite[m.Chat.ID] = msgID
+	case m.Text == MenuBookings:
+		p.sendMenuReply(ctx, m.Chat.ID, formatActive)
+	case m.Text == MenuHistory:
+		p.sendMenuReply(ctx, m.Chat.ID, formatHistory)
 	case m.Contact != nil:
 		if m.From == nil || m.Contact.UserID != m.From.ID {
 			log.Printf("контакт не принадлежит отправителю — игнорирую")
@@ -99,4 +111,20 @@ func (p *Poller) handle(ctx context.Context, u Update) error {
 		}
 	}
 	return nil
+}
+
+// sendMenuReply тянет данные гостя и шлёт отформатированный ответ; ошибки бэкенда
+// не фатальны для poller (offset двигается) — гостю показываем «попробуй позже».
+func (p *Poller) sendMenuReply(ctx context.Context, chatID int64, format func(backend.GuestBookings) string) {
+	gb, err := p.bookings.GetGuestBookings(ctx, chatID)
+	if err != nil {
+		log.Printf("bot menu: backend: %v", err)
+		if _, err := p.api.SendMessage(ctx, chatID, "Не получилось загрузить, попробуй позже 🙏", false); err != nil {
+			log.Printf("sendMessage menu error: %v", err)
+		}
+		return
+	}
+	if _, err := p.api.SendMessage(ctx, chatID, format(gb), false); err != nil {
+		log.Printf("sendMessage menu: %v", err)
+	}
 }

@@ -3,8 +3,11 @@ package telegram
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/buterbrot359/japan-guest-booking/bot-service/internal/backend"
 )
 
 type fakeAPI struct {
@@ -47,9 +50,18 @@ func formatKey(chatID int64, phone, username string) string {
 	return string(rune(chatID)) + "|" + phone + "|" + username
 }
 
+type fakeFetcher struct {
+	gb  backend.GuestBookings
+	err error
+}
+
+func (f *fakeFetcher) GetGuestBookings(ctx context.Context, chatID int64) (backend.GuestBookings, error) {
+	return f.gb, f.err
+}
+
 func TestStartCommandSendsGreetingWithContactButton(t *testing.T) {
 	api := &fakeAPI{}
-	p := NewPoller(api, &fakePublisher{})
+	p := NewPoller(api, &fakePublisher{}, &fakeFetcher{})
 
 	p.handle(context.Background(), Update{Message: &Message{
 		Chat: Chat{ID: 555}, From: &User{ID: 777}, Text: "/start"}})
@@ -62,7 +74,7 @@ func TestStartCommandSendsGreetingWithContactButton(t *testing.T) {
 func TestOwnContactIsPublishedWithoutAck(t *testing.T) {
 	api := &fakeAPI{}
 	pub := &fakePublisher{}
-	p := NewPoller(api, pub)
+	p := NewPoller(api, pub, &fakeFetcher{})
 
 	p.handle(context.Background(), Update{Message: &Message{
 		Chat: Chat{ID: 555}, From: &User{ID: 777, Username: "masha"},
@@ -79,7 +91,7 @@ func TestOwnContactIsPublishedWithoutAck(t *testing.T) {
 
 func TestStartInviteDeletedOnContact(t *testing.T) {
 	api := &fakeAPI{}
-	p := NewPoller(api, &fakePublisher{})
+	p := NewPoller(api, &fakePublisher{}, &fakeFetcher{})
 
 	// /start шлёт приглашение (message_id=1), затем гость делится контактом
 	p.handle(context.Background(), Update{Message: &Message{
@@ -96,7 +108,7 @@ func TestStartInviteDeletedOnContact(t *testing.T) {
 
 func TestContactWithoutPriorStartDoesNotDelete(t *testing.T) {
 	api := &fakeAPI{}
-	p := NewPoller(api, &fakePublisher{})
+	p := NewPoller(api, &fakePublisher{}, &fakeFetcher{})
 
 	p.handle(context.Background(), Update{Message: &Message{
 		Chat: Chat{ID: 555}, From: &User{ID: 777, Username: "masha"},
@@ -110,7 +122,7 @@ func TestContactWithoutPriorStartDoesNotDelete(t *testing.T) {
 func TestForeignContactIsRejected(t *testing.T) {
 	api := &fakeAPI{}
 	pub := &fakePublisher{}
-	p := NewPoller(api, pub)
+	p := NewPoller(api, pub, &fakeFetcher{})
 
 	// контакт чужого пользователя (user_id != from.id) — не публикуем
 	p.handle(context.Background(), Update{Message: &Message{
@@ -125,7 +137,7 @@ func TestForeignContactIsRejected(t *testing.T) {
 func TestContactPublishErrorIsReturnedAndAckNotSent(t *testing.T) {
 	api := &fakeAPI{}
 	pub := &fakePublisher{err: errors.New("kafka недоступна")}
-	p := NewPoller(api, pub)
+	p := NewPoller(api, pub, &fakeFetcher{})
 
 	err := p.handle(context.Background(), Update{Message: &Message{
 		Chat: Chat{ID: 555}, From: &User{ID: 777, Username: "masha"},
@@ -185,7 +197,7 @@ func TestRunRedeliversFailedUpdateThenAdvancesOffset(t *testing.T) {
 		Contact: &Contact{PhoneNumber: "81300000001", UserID: 777}}}
 	api := &sequencedAPI{update: update}
 	pub := &flakyPublisher{}
-	p := NewPoller(api, pub)
+	p := NewPoller(api, pub, &fakeFetcher{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 4500*time.Millisecond)
 	defer cancel()
@@ -200,5 +212,30 @@ func TestRunRedeliversFailedUpdateThenAdvancesOffset(t *testing.T) {
 	if p.offset != update.UpdateID+1 {
 		t.Fatalf("ожидал offset=%d (update передоставлен и в итоге сдвинут), получил %d",
 			update.UpdateID+1, p.offset)
+	}
+}
+
+func TestMenuButtonShowsActiveBooking(t *testing.T) {
+	api := &fakeAPI{}
+	fetch := &fakeFetcher{gb: backend.GuestBookings{Linked: true,
+		Active: &backend.Booking{CheckIn: "2026-03-12", CheckOut: "2026-03-15", Status: "CONFIRMED"}}}
+	p := NewPoller(api, &fakePublisher{}, fetch)
+
+	p.handle(context.Background(), Update{Message: &Message{Chat: Chat{ID: 555}, Text: MenuBookings}})
+
+	if len(api.sent) != 1 || !strings.Contains(api.sent[0], "12 марта 2026") {
+		t.Fatalf("ожидал ответ с активной бронью: %v", api.sent)
+	}
+}
+
+func TestMenuButtonBackendErrorTellsRetry(t *testing.T) {
+	api := &fakeAPI{}
+	fetch := &fakeFetcher{err: errors.New("бэкенд лёг")}
+	p := NewPoller(api, &fakePublisher{}, fetch)
+
+	p.handle(context.Background(), Update{Message: &Message{Chat: Chat{ID: 555}, Text: MenuHistory}})
+
+	if len(api.sent) != 1 || !strings.Contains(api.sent[0], "попробуй позже") {
+		t.Fatalf("ожидал совет попробовать позже: %v", api.sent)
 	}
 }
