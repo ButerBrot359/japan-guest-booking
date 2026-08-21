@@ -57,6 +57,13 @@ class CreateBookingTest extends AbstractIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "select count(*) from outbox where event_type = 'BOOKING_CONFIRMED'", Integer.class))
                 .isEqualTo(1);
+        // recipient=GUEST — бот вычистит старый статус только в чате гостя, не в ленте владельца
+        // (payload в outbox — конверт: полезная нагрузка вложена под ->'payload')
+        assertThat(jdbc.queryForObject("""
+                select payload->'payload'->>'recipient' from outbox
+                where event_type = 'BOOKING_CONFIRMED'
+                  and (payload->'payload'->>'chat_id')::bigint = 777101
+                """, String.class)).isEqualTo("GUEST");
     }
 
     @Test

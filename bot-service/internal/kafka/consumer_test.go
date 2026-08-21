@@ -164,6 +164,72 @@ func TestNewOtpDeletesPreviousCodeMessage(t *testing.T) {
 	}
 }
 
+// Успешный вход → бэкенд шлёт OTP_CONSUMED → сообщение с кодом удаляется из чата.
+func TestOtpConsumedDeletesCodeMessage(t *testing.T) {
+	sender := &fakeSender{}
+	c := newConsumerCore(sender)
+
+	_ = c.handle(context.Background(), otpJSON("e-c1", 555, "111111")) // код → message_id=1
+	_ = c.handle(context.Background(), eventJSON("e-c2", "OTP_CONSUMED", `{"chat_id":555}`))
+
+	if len(sender.deleted) != 1 || sender.deleted[0] != 1 {
+		t.Fatalf("ожидал удаление сообщения с кодом (id=1): %v", sender.deleted)
+	}
+	// повторный OTP_CONSUMED без активного кода ничего не удаляет
+	_ = c.handle(context.Background(), eventJSON("e-c3", "OTP_CONSUMED", `{"chat_id":555}`))
+	if len(sender.deleted) != 1 {
+		t.Fatalf("нечего удалять во второй раз: %v", sender.deleted)
+	}
+}
+
+func bookingJSON(id, eventType string, chatID int64, recipient string) []byte {
+	return eventJSON(id, eventType,
+		`{"chat_id":`+fmt.Sprint(chatID)+`,"guest_name":"Маша","check_in":"2027-06-01",`+
+			`"check_out":"2027-06-05","recipient":"`+recipient+`"}`)
+}
+
+// В чате гостя висит только последний статус брони — прошлые бот удаляет.
+func TestGuestBookingKeepsOnlyLatestStatus(t *testing.T) {
+	sender := &fakeSender{}
+	c := newConsumerCore(sender)
+
+	_ = c.handle(context.Background(), bookingJSON("e-b1", "BOOKING_CONFIRMED", 555, "GUEST"))
+	_ = c.handle(context.Background(), bookingJSON("e-b2", "BOOKING_RESCHEDULED", 555, "GUEST"))
+	_ = c.handle(context.Background(), bookingJSON("e-b3", "BOOKING_CANCELLED", 555, "GUEST"))
+
+	// три уведомления отправлены, но два прошлых удалены — в чате остаётся последнее
+	if len(sender.sent) != 3 {
+		t.Fatalf("ожидал 3 отправки: %v", sender.sent)
+	}
+	if len(sender.deleted) != 2 || sender.deleted[0] != 1 || sender.deleted[1] != 2 {
+		t.Fatalf("ожидал удаление двух прошлых статусов (id 1,2): %v", sender.deleted)
+	}
+}
+
+// В ленте владельца (recipient=ADMIN) прошлые уведомления НЕ вытесняются.
+func TestAdminBookingFeedIsNotPruned(t *testing.T) {
+	sender := &fakeSender{}
+	c := newConsumerCore(sender)
+
+	_ = c.handle(context.Background(), bookingJSON("e-a1", "BOOKING_CONFIRMED", 900, "ADMIN"))
+	_ = c.handle(context.Background(), bookingJSON("e-a2", "BOOKING_CANCELLED", 900, "ADMIN"))
+
+	if len(sender.deleted) != 0 {
+		t.Fatalf("лента владельца не должна чиститься: %v", sender.deleted)
+	}
+}
+
+func TestContactUnknownGetsPoliteReply(t *testing.T) {
+	sender := &fakeSender{}
+	c := newConsumerCore(sender)
+
+	_ = c.handle(context.Background(), eventJSON("e-u1", "CONTACT_UNKNOWN", `{"chat_id":555}`))
+
+	if len(sender.sent) != 1 || !strings.Contains(sender.sent[0], "пока нет в списке") {
+		t.Fatalf("ожидал вежливый ответ чужому: %v", sender.sent)
+	}
+}
+
 // Старое сообщение могли удалить руками — сбой удаления не должен блокировать доставку кода.
 func TestOtpDeleteFailureDoesNotBlockSend(t *testing.T) {
 	sender := &fakeSender{deleteErr: errors.New("message to delete not found")}

@@ -11,6 +11,7 @@ type fakeAPI struct {
 	sent           []string
 	sentChatIDs    []int64
 	contactButtons []bool
+	deleted        []int64
 }
 
 func (f *fakeAPI) GetUpdates(ctx context.Context, offset int64) ([]Update, error) {
@@ -22,6 +23,11 @@ func (f *fakeAPI) SendMessage(ctx context.Context, chatID int64, text string, re
 	f.sentChatIDs = append(f.sentChatIDs, chatID)
 	f.contactButtons = append(f.contactButtons, requestContact)
 	return int64(len(f.sent)), nil
+}
+
+func (f *fakeAPI) DeleteMessage(ctx context.Context, chatID, messageID int64) error {
+	f.deleted = append(f.deleted, messageID)
+	return nil
 }
 
 type fakePublisher struct {
@@ -53,7 +59,7 @@ func TestStartCommandSendsGreetingWithContactButton(t *testing.T) {
 	}
 }
 
-func TestOwnContactIsPublished(t *testing.T) {
+func TestOwnContactIsPublishedWithoutAck(t *testing.T) {
 	api := &fakeAPI{}
 	pub := &fakePublisher{}
 	p := NewPoller(api, pub)
@@ -65,8 +71,39 @@ func TestOwnContactIsPublished(t *testing.T) {
 	if len(pub.published) != 1 {
 		t.Fatalf("ожидал 1 публикацию, получил %d", len(pub.published))
 	}
-	if len(api.sent) != 1 {
-		t.Fatalf("ожидал ack-сообщение пользователю")
+	// «Принял!» больше не шлём: ответ придёт из бэкенда (WELCOME или CONTACT_UNKNOWN)
+	if len(api.sent) != 0 {
+		t.Fatalf("ack-сообщение больше не должно отправляться: %v", api.sent)
+	}
+}
+
+func TestStartInviteDeletedOnContact(t *testing.T) {
+	api := &fakeAPI{}
+	p := NewPoller(api, &fakePublisher{})
+
+	// /start шлёт приглашение (message_id=1), затем гость делится контактом
+	p.handle(context.Background(), Update{Message: &Message{
+		Chat: Chat{ID: 555}, From: &User{ID: 777}, Text: "/start"}})
+	p.handle(context.Background(), Update{Message: &Message{
+		Chat: Chat{ID: 555}, From: &User{ID: 777, Username: "masha"},
+		Contact: &Contact{PhoneNumber: "81300000001", UserID: 777}}})
+
+	// приглашение «поделись контактом» отработало — убираем его из чата
+	if len(api.deleted) != 1 || api.deleted[0] != 1 {
+		t.Fatalf("ожидал удаление приглашения (id=1): %v", api.deleted)
+	}
+}
+
+func TestContactWithoutPriorStartDoesNotDelete(t *testing.T) {
+	api := &fakeAPI{}
+	p := NewPoller(api, &fakePublisher{})
+
+	p.handle(context.Background(), Update{Message: &Message{
+		Chat: Chat{ID: 555}, From: &User{ID: 777, Username: "masha"},
+		Contact: &Contact{PhoneNumber: "81300000001", UserID: 777}}})
+
+	if len(api.deleted) != 0 {
+		t.Fatalf("без приглашения удалять нечего: %v", api.deleted)
 	}
 }
 
@@ -121,6 +158,10 @@ func (a *sequencedAPI) GetUpdates(ctx context.Context, offset int64) ([]Update, 
 
 func (a *sequencedAPI) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (int64, error) {
 	return 1, nil
+}
+
+func (a *sequencedAPI) DeleteMessage(ctx context.Context, chatID, messageID int64) error {
+	return nil
 }
 
 // flakyPublisher падает на первом вызове и успевает со второго.

@@ -1,6 +1,7 @@
 package com.batowka.guestbooking.auth;
 
 import com.batowka.guestbooking.booking.TelegramNotLinkedException;
+import com.batowka.guestbooking.messaging.OutboxWriter;
 import com.batowka.guestbooking.otp.OtpService;
 import com.batowka.guestbooking.user.Role;
 import com.batowka.guestbooking.user.UserAccount;
@@ -18,6 +19,7 @@ public class LoginService {
     private final UserAccountRepository users;
     private final OtpService otp;
     private final JwtService jwt;
+    private final OutboxWriter outbox;
 
     /** Шаг 1 входа: код в Telegram. Куку не выдаёт. */
     @Transactional
@@ -35,6 +37,11 @@ public class LoginService {
     public String verify(String rawPhone, String code) {
         UserAccount user = findFriend(rawPhone);
         otp.verifyByAction(user.getId(), "LOGIN", code);
+        // код использован — бот уберёт сообщение с ним из чата
+        if (user.getTelegramChatId() != null) {
+            outbox.write("notifications.outbound", "OTP_CONSUMED",
+                    Map.of("chat_id", user.getTelegramChatId()));
+        }
         return jwt.issue(user.getId(), user.getRole());
     }
 

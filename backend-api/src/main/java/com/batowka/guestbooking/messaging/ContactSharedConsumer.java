@@ -82,8 +82,11 @@ public class ContactSharedConsumer {
             log.warn("CONTACT_SHARED с ненормализуемым телефоном, игнорирую");
             return;
         }
-        users.findByPhoneAndDeletedAtIsNull(phone.get()).ifPresent(user -> link(user, chatId));
-        // телефона нет в белом списке — молча игнорируем (спека этапа 3, §3)
+        users.findByPhoneAndDeletedAtIsNull(phone.get()).ifPresentOrElse(
+                user -> link(user, chatId),
+                // чужой номер — не в тишине: бот ответит «тебя пока нет в списке гостей»
+                () -> outbox.write("notifications.outbound", "CONTACT_UNKNOWN",
+                        Map.of("chat_id", chatId)));
     }
 
     private void link(UserAccount user, long chatId) {

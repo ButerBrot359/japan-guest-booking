@@ -65,6 +65,24 @@ class VerifyLoginTest extends AbstractIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "select status from otp_challenges order by id desc limit 1", String.class))
                 .isEqualTo("USED");
+        // бот удалит сообщение с кодом входа — код уже использован
+        assertThat(jdbc.queryForObject("""
+                select count(*) from outbox
+                where event_type = 'OTP_CONSUMED' and payload::text like '%565010%'
+                """, Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void failedVerifyEmitsNoConsumedEvent() throws Exception {
+        givenFriendAndCodeSent();
+
+        mvc.perform(post("/api/auth/verify")
+                        .contentType(APPLICATION_JSON).content(verifyBody("000000")))
+                .andExpect(status().isBadRequest());
+
+        assertThat(jdbc.queryForObject(
+                "select count(*) from outbox where event_type = 'OTP_CONSUMED'",
+                Integer.class)).isZero();
     }
 
     @Test

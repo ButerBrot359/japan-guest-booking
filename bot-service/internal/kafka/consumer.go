@@ -39,12 +39,32 @@ type consumerCore struct {
 	// старый в БД, поэтому и сообщение со старым кодом из чата убираем.
 	// In-memory: после рестарта бота одно старое сообщение может остаться — приемлемо.
 	lastOtp map[int64]int64
+	// chat_id гостя → message_id последнего статуса брони: в чате гостя держим
+	// только актуальный статус, прошлые удаляем. Лента владельца (recipient=ADMIN)
+	// сюда не попадает — там копится вся история.
+	lastBooking map[int64]int64
 }
 
 const dedupCap = 1000
 
 func newConsumerCore(sender Sender) *consumerCore {
-	return &consumerCore{sender: sender, seen: make(map[string]bool), lastOtp: make(map[int64]int64)}
+	return &consumerCore{
+		sender:      sender,
+		seen:        make(map[string]bool),
+		lastOtp:     make(map[int64]int64),
+		lastBooking: make(map[int64]int64),
+	}
+}
+
+// deleteTracked удаляет ранее отправленное сообщение (best-effort: могли удалить
+// руками) и забывает его. Возвращает управление независимо от исхода удаления.
+func (c *consumerCore) deleteTracked(ctx context.Context, track map[int64]int64, chatID int64) {
+	if prevID, ok := track[chatID]; ok {
+		if err := c.sender.DeleteMessage(ctx, chatID, prevID); err != nil {
+			log.Printf("удаление прошлого сообщения в чате %d: %v", chatID, err)
+		}
+		delete(track, chatID)
+	}
 }
 
 func (c *consumerCore) handle(ctx context.Context, raw []byte) error {
@@ -78,20 +98,33 @@ func (c *consumerCore) handle(ctx context.Context, raw []byte) error {
 			text = "Код для входа: " + p.Code + ". Действует 5 минут."
 		}
 		// прошлый код уже вытеснен в БД — его сообщение убираем, чтобы чат
-		// не превращался в свалку недействительных кодов; best-effort:
-		// сообщение могли удалить руками, доставку нового кода это не блокирует
-		if prevID, ok := c.lastOtp[p.ChatID]; ok {
-			if err := c.sender.DeleteMessage(ctx, p.ChatID, prevID); err != nil {
-				log.Printf("удаление старого сообщения с кодом: %v", err)
-			}
-			delete(c.lastOtp, p.ChatID)
-		}
+		// не превращался в свалку недействительных кодов
+		c.deleteTracked(ctx, c.lastOtp, p.ChatID)
 		msgID, err := c.send(ctx, env.EventID, p.ChatID, text)
 		if err != nil {
 			return err
 		}
 		c.lastOtp[p.ChatID] = msgID
 		return nil
+	case "OTP_CONSUMED":
+		var p events.OtpConsumed
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			log.Printf("битый payload OTP_CONSUMED: %v", err)
+			return nil
+		}
+		// вход завершён — сообщение с кодом больше не нужно
+		c.deleteTracked(ctx, c.lastOtp, p.ChatID)
+		c.remember(env.EventID)
+		return nil
+	case "CONTACT_UNKNOWN":
+		var p events.ContactUnknown
+		if err := json.Unmarshal(env.Payload, &p); err != nil {
+			log.Printf("битый payload CONTACT_UNKNOWN: %v", err)
+			return nil
+		}
+		_, err := c.send(ctx, env.EventID, p.ChatID,
+			"Тебя пока нет в списке гостей. Если хочешь в гости — оставь заявку на сайте.")
+		return err
 	case "BOOKING_CONFIRMED":
 		return c.renderBooking(ctx, env, "Бронь подтверждена")
 	case "BOOKING_CANCELLED":
@@ -143,9 +176,20 @@ func (c *consumerCore) renderBooking(ctx context.Context, env events.Envelope, p
 	if p.By == "ADMIN" {
 		prefix += " владельцем"
 	}
-	_, err := c.send(ctx, env.EventID, p.ChatID,
+	// у гостя в чате — только актуальный статус: прошлое уведомление удаляем.
+	// Лента владельца (recipient=ADMIN) не чистится — там копится вся история.
+	if p.Recipient == "GUEST" {
+		c.deleteTracked(ctx, c.lastBooking, p.ChatID)
+	}
+	msgID, err := c.send(ctx, env.EventID, p.ChatID,
 		prefix+": "+p.GuestName+", заезд "+ruDate(p.CheckIn)+", выезд "+ruDate(p.CheckOut)+".")
-	return err
+	if err != nil {
+		return err
+	}
+	if p.Recipient == "GUEST" {
+		c.lastBooking[p.ChatID] = msgID
+	}
+	return nil
 }
 
 // kafkaReader — минимум от *kafkago.Reader, нужный Run (позволяет подменить фейком в тестах).

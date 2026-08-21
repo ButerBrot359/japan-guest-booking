@@ -15,10 +15,13 @@ type Poller struct {
 	api       API
 	publisher ContactPublisher
 	offset    int64
+	// chat_id → message_id приглашения «поделись контактом»: удаляем его,
+	// когда гость поделился контактом. In-memory, переживает всё кроме рестарта.
+	startInvite map[int64]int64
 }
 
 func NewPoller(api API, publisher ContactPublisher) *Poller {
-	return &Poller{api: api, publisher: publisher}
+	return &Poller{api: api, publisher: publisher, startInvite: make(map[int64]int64)}
 }
 
 // Run крутит long polling до отмены контекста.
@@ -68,29 +71,31 @@ func (p *Poller) handle(ctx context.Context, u Update) error {
 	}
 	switch {
 	case m.Text == "/start":
-		if _, err := p.api.SendMessage(ctx, m.Chat.ID,
+		msgID, err := p.api.SendMessage(ctx, m.Chat.ID,
 			"Привет! Чтобы получать коды подтверждения и уведомления о бронях, "+
-				"поделись, пожалуйста, своим контактом.", true); err != nil {
+				"поделись, пожалуйста, своим контактом.", true)
+		if err != nil {
 			log.Printf("sendMessage /start: %v", err)
+			return nil
 		}
+		p.startInvite[m.Chat.ID] = msgID
 	case m.Contact != nil:
 		if m.From == nil || m.Contact.UserID != m.From.ID {
 			log.Printf("контакт не принадлежит отправителю — игнорирую")
 			return nil
 		}
-		username := ""
-		if m.From != nil {
-			username = m.From.Username
-		}
 		if err := p.publisher.PublishContactShared(ctx, m.Chat.ID,
-			m.Contact.PhoneNumber, username); err != nil {
+			m.Contact.PhoneNumber, m.From.Username); err != nil {
 			log.Printf("publish CONTACT_SHARED: %v", err)
 			return err
 		}
-		if _, err := p.api.SendMessage(ctx, m.Chat.ID,
-			"Принял! Если твой номер в списке гостей — сейчас придёт подтверждение.",
-			false); err != nil {
-			log.Printf("sendMessage ack: %v", err)
+		// приглашение отработало — убираем его; ответ (WELCOME / CONTACT_UNKNOWN)
+		// придёт из бэкенда, отдельный ack больше не шлём
+		if inviteID, ok := p.startInvite[m.Chat.ID]; ok {
+			if err := p.api.DeleteMessage(ctx, m.Chat.ID, inviteID); err != nil {
+				log.Printf("удаление приглашения /start: %v", err)
+			}
+			delete(p.startInvite, m.Chat.ID)
 		}
 	}
 	return nil

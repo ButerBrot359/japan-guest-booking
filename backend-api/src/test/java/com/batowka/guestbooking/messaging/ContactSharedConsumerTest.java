@@ -74,7 +74,7 @@ class ContactSharedConsumerTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void unknownPhoneIsSilentlyIgnored() {
+    void unknownPhoneGetsPoliteReplyNotWelcome() {
         sendAndAwaitProcessed(UUID.randomUUID().toString(), 555003L, "81999999999");
 
         assertThat(jdbc.queryForObject(
@@ -83,6 +83,11 @@ class ContactSharedConsumerTest extends AbstractIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "select count(*) from outbox where event_type = 'WELCOME'",
                 Integer.class)).isZero();
+        // чужой не остаётся в тишине — бот ответит «тебя пока нет в списке»
+        assertThat(jdbc.queryForObject("""
+                select count(*) from outbox
+                where event_type = 'CONTACT_UNKNOWN' and payload::text like '%555003%'
+                """, Integer.class)).isEqualTo(1);
     }
 
     @Test

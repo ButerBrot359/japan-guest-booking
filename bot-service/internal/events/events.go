@@ -33,12 +33,23 @@ type OtpCode struct {
 	ExpiresAt string `json:"expires_at"`
 }
 
+// OtpConsumed — код входа использован: сообщение с ним больше не нужно.
+type OtpConsumed struct {
+	ChatID int64 `json:"chat_id"`
+}
+
+// ContactUnknown — контакт не из белого списка: вежливый ответ вместо тишины.
+type ContactUnknown struct {
+	ChatID int64 `json:"chat_id"`
+}
+
 type BookingEvent struct {
 	ChatID    int64  `json:"chat_id"`
 	GuestName string `json:"guest_name"`
 	CheckIn   string `json:"check_in"`
 	CheckOut  string `json:"check_out"`
-	By        string `json:"by,omitempty"` // GUEST | ADMIN; пусто у старых событий
+	By        string `json:"by,omitempty"`        // GUEST | ADMIN — кто сделал действие
+	Recipient string `json:"recipient,omitempty"` // GUEST | ADMIN — кому шлём; у гостя чистим прошлый статус
 }
 
 type AccessRequestReceived struct {

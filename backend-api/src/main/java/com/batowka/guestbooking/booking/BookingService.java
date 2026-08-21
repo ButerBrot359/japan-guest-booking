@@ -179,24 +179,27 @@ public class BookingService {
         // обнуляет telegram_chat_id) — событие некому слать, но админское уведомление
         // всё равно должно уйти
         if (guest.getTelegramChatId() != null) {
-            outboxEvent(guest.getTelegramChatId(), guest, eventType, checkIn, checkOut, by);
+            outboxEvent(guest.getTelegramChatId(), guest, eventType, checkIn, checkOut, by, "GUEST");
         }
         jdbc.query("""
                 select telegram_chat_id from users
                 where role = 'ADMIN' and telegram_chat_id is not null
                 """, rs -> {
-            outboxEvent(rs.getLong(1), guest, eventType, checkIn, checkOut, by);
+            // ADMIN: у владельца это лента всех гостей — бот не должен вытеснять прошлые
+            outboxEvent(rs.getLong(1), guest, eventType, checkIn, checkOut, by, "ADMIN");
         });
     }
 
     private void outboxEvent(Long chatId, UserAccount guest, String eventType,
-                             LocalDate checkIn, LocalDate checkOut, String by) {
+                             LocalDate checkIn, LocalDate checkOut, String by, String recipient) {
         outbox.write("notifications.outbound", eventType, Map.of(
                 "chat_id", chatId,
                 "guest_name", guest.getName(),
                 "check_in", checkIn.toString(),
                 "check_out", checkOut.toString(),
-                "by", by));
+                "by", by,
+                // GUEST: бот держит в чате только последний статус, старое удаляет
+                "recipient", recipient));
     }
 
     /** Активная бронь для /api/me: единственный живой статус — CONFIRMED. */

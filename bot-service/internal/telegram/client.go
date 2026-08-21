@@ -42,6 +42,7 @@ type Contact struct {
 type API interface {
 	GetUpdates(ctx context.Context, offset int64) ([]Update, error)
 	SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (int64, error)
+	DeleteMessage(ctx context.Context, chatID, messageID int64) error
 }
 
 type Client struct {
