@@ -23,3 +23,8 @@
 body {
   @apply bg-card text-ink;
 }
+
+/* Tailwind v4 preflight ставит кнопкам cursor: default — возвращаем поинтер */
+button:not(:disabled) {
+  cursor: pointer;
+}

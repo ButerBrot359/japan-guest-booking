@@ -174,10 +174,14 @@ export function CalendarPage() {
         )}
 
         {flow.kind === 'selecting-reschedule' && (
-          <p className="mb-2 rounded-lg bg-card p-2 text-xs text-muted">
-            Перенос: выбери новые даты в календаре.{' '}
-            <button type="button" className="text-hanko" onClick={() => switchFlow({ kind: 'idle' })}>Передумал</button>
-          </p>
+          <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-card p-2 text-xs text-muted">
+            <span>Перенос: выбери новые даты в календаре.</span>
+            <button type="button"
+              className="shrink-0 rounded-lg border border-hanko px-3 py-1.5 text-hanko"
+              onClick={() => switchFlow({ kind: 'idle' })}>
+              Передумал
+            </button>
+          </div>
         )}
 
         {guestInfo && (

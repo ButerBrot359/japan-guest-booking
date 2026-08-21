@@ -165,13 +165,13 @@ export function LoginCard() {
               <p className="mb-1 text-sm text-hanko">Этого номера нет в списке гостей</p>
               <p className="mb-2 text-xs text-muted">Оставь заявку — владелец добавит тебя.</p>
               <input
-                className="mb-1.5 w-full rounded-lg border border-muted/40 bg-paper p-2 text-xs"
+                className="mb-1.5 w-full rounded-lg border border-muted/40 bg-paper p-2 text-base lg:text-sm"
                 placeholder="Как тебя зовут"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
               <input
-                className="w-full rounded-lg border border-muted/40 bg-paper p-2 text-xs"
+                className="w-full rounded-lg border border-muted/40 bg-paper p-2 text-base lg:text-sm"
                 placeholder="Откуда ты меня знаешь :)"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
