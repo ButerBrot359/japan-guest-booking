@@ -36,14 +36,16 @@ public class AccessRequestService {
         // UnexpectedRollbackException независимо от пойманного исключения. Поэтому
         // upsert без исключений: проигравший гонку и повторная заявка — один и тот же
         // идемпотентный путь, вставка молча не происходит, событие не пишется.
-        Integer inserted = jdbc.update("""
+        java.util.List<Long> ids = jdbc.queryForList("""
                 insert into access_requests(phone, name, message)
                 values (?, ?, ?)
                 on conflict (phone) where status = 'PENDING' do nothing
-                """, phone, name, message);
-        if (inserted == 0) {
+                returning id
+                """, Long.class, phone, name, message);
+        if (ids.isEmpty()) {
             return; // заявка уже ждёт решения (или проиграна гонка) — не плодим и не спамим админа
         }
+        long requestId = ids.get(0);
         // уведомление админу той же транзакцией; без привязанного TG — просто некому слать
         jdbc.query("""
                 select telegram_chat_id from users
@@ -51,6 +53,7 @@ public class AccessRequestService {
                 """, rs -> {
             outbox.write("notifications.outbound", "ACCESS_REQUEST_RECEIVED", Map.of(
                     "chat_id", rs.getLong(1),
+                    "request_id", requestId,
                     "name", name,
                     "phone", phone,
                     "message", message == null ? "" : message));
