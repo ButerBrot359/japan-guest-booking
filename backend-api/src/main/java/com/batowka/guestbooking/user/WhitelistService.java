@@ -64,9 +64,12 @@ public class WhitelistService {
         if (user.getRole() == Role.ADMIN) {
             throw new CannotDeleteAdminException();
         }
+        // >= (не >): с инклюзивной семантикой V8 бронь с check_out = сегодня ещё
+        // занимает дом сегодня (см. BookingService.completePastBooking) — гостя
+        // с такой бронью удалять нельзя, пока она не завершится завтра
         Integer active = jdbc.queryForObject("""
                 select count(*) from bookings
-                where user_id = ? and status = 'CONFIRMED' and check_out > ?
+                where user_id = ? and status = 'CONFIRMED' and check_out >= ?
                 """, Integer.class, id, LocalDate.now(BookingService.JST));
         if (active != null && active > 0) {
             throw new ActiveBookingExistsException();

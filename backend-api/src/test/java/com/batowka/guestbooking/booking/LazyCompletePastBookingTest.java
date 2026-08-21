@@ -75,13 +75,38 @@ class LazyCompletePastBookingTest extends AbstractIntegrationTest {
     void отмена_прошедшей_брони_даёт_BOOKING_EXPIRED_и_завершает_её() throws Exception {
         LocalDate today = LocalDate.now(BookingService.JST);
         Long userId = guest("+70000000102", 102L);
-        // check_out «сегодня» — выезд состоялся сегодня, поездка уже прошедшая
-        Long bookingId = pastConfirmedBooking(userId, today.minusDays(3), today);
+        // check_out «вчера» — выезд уже состоялся, поездка прошедшая
+        Long bookingId = pastConfirmedBooking(userId, today.minusDays(3), today.minusDays(1));
 
         mvc.perform(delete("/api/bookings/" + bookingId).cookie(auth(userId)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("BOOKING_EXPIRED"));
 
         assertThat(statusOf(bookingId)).isEqualTo("COMPLETED");
+    }
+
+    /**
+     * Граница ленивого завершения (находка финального ревью этапа 6.6):
+     * check_out = сегодня — дом ещё занят (инклюзивная семантика V8), бронь
+     * должна ОСТАТЬСЯ CONFIRMED и держать календарь; только check_out = вчера
+     * завершается. Раньше completePastBooking использовал check_out <= today,
+     * из-за чего в день выезда бронь выпадала из календаря и другой гость мог
+     * заехать в тот же день.
+     */
+    @Test
+    void бронь_с_выездом_сегодня_не_завершается_а_с_выездом_вчера_завершается() throws Exception {
+        LocalDate today = LocalDate.now(BookingService.JST);
+        Long userId = guest("+70000000103", 103L);
+        // check_out «сегодня» — дом занят весь сегодняшний день, бронь ещё активна
+        Long bookingId = pastConfirmedBooking(userId, today.minusDays(3), today);
+
+        mvc.perform(patch("/api/bookings/" + bookingId).cookie(auth(userId))
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"checkIn": "%s", "checkOut": "%s"}"""
+                                .formatted(today.plusDays(30), today.plusDays(33))))
+                .andExpect(status().isNoContent());
+
+        assertThat(statusOf(bookingId)).isEqualTo("CONFIRMED");
     }
 }

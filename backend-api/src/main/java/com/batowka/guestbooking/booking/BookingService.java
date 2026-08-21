@@ -68,12 +68,17 @@ public class BookingService {
         // «одна CONFIRMED на гостя» и даты в exclusion constraint для новой брони
         bookings.findFirstByUserIdAndStatusOrderByIdDesc(userId, BookingStatus.CONFIRMED)
                 .ifPresent(old -> {
-                    jdbc.update("""
+                    int n = jdbc.update("""
                             update bookings set status = 'CANCELLED', cancelled_by = 'GUEST'
                             where id = ? and status = 'CONFIRMED'
                             """, old.getId());
-                    notifyBookingEvent(user, "BOOKING_CANCELLED",
-                            old.getCheckIn(), old.getCheckOut(), "GUEST");
+                    // guard: если админ уже отменил старую бронь в этот же момент (гонка),
+                    // UPDATE затронет 0 строк — не шлём гостю дублирующее уведомление
+                    // об отмене поверх уже отправленного админским cancel
+                    if (n == 1) {
+                        notifyBookingEvent(user, "BOOKING_CANCELLED",
+                                old.getCheckIn(), old.getCheckOut(), "GUEST");
+                    }
                 });
         Long bookingId;
         try {
@@ -202,7 +207,13 @@ public class BookingService {
     }
 
     /**
-     * Лениво завершает прошедшие поездки: CONFIRMED с выездом сегодня или раньше → COMPLETED.
+     * Лениво завершает прошедшие поездки: CONFIRMED с выездом СТРОГО до сегодня → COMPLETED.
+     * Граница — check_out < today, а не <=: с инклюзивной семантикой V8
+     * (daterange(check_in, check_out, '[]')) день выезда всё ещё занят домом —
+     * гость может остаться до конца дня, и следующий заезд в этот день запрещён
+     * (правило владельца, этап 6.6). Если завершать в день выезда, бронь выпадет
+     * из exclusion constraint и календаря раньше времени, и другой гость сможет
+     * забронировать заезд прямо в день выезда предыдущего гостя.
      * Атомарный условный UPDATE (урок этапа 5) — без шедулера и без exists-then-update.
      * REQUIRES_NEW: коммитится независимо от вызывающего метода — иначе, например,
      * reschedule/cancel откатят завершение вместе с BookingExpiredException,
@@ -211,7 +222,7 @@ public class BookingService {
     public void completePastBooking(Long userId) {
         requiresNew.executeWithoutResult(status -> jdbc.update(
                 "update bookings set status = 'COMPLETED' "
-                        + "where user_id = ? and status = 'CONFIRMED' and check_out <= ?",
+                        + "where user_id = ? and status = 'CONFIRMED' and check_out < ?",
                 userId, LocalDate.now(JST)));
     }
 

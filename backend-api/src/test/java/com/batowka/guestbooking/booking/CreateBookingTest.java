@@ -105,6 +105,35 @@ class CreateBookingTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void конфликтДатНеОткатываетСтаруюБрониИНеШлётОтменуВOutbox() throws Exception {
+        // у гостя уже есть CONFIRMED-бронь; он пытается забронировать даты,
+        // занятые ДРУГИМ гостем — вся транзакция (включая отмену старой брони
+        // и её outbox-запись) должна откатиться
+        Long masha = guest("+81320000008", 777108L);
+        Long petya = guest("+81320000009", 777109L);
+        jdbc.update("""
+                insert into bookings(user_id, check_in, check_out, status)
+                values (?, '2027-10-01', '2027-10-05', 'CONFIRMED')
+                """, petya);
+        jdbc.update("""
+                insert into bookings(user_id, check_in, check_out, status)
+                values (?, '2027-10-10', '2027-10-15', 'CONFIRMED')
+                """, masha);
+
+        mvc.perform(post("/api/bookings").cookie(auth(masha))
+                        .contentType(APPLICATION_JSON).content(body("2027-10-02", "2027-10-04")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DATES_TAKEN"));
+
+        assertThat(jdbc.queryForObject(
+                "select status from bookings where check_in = '2027-10-10'", String.class))
+                .isEqualTo("CONFIRMED");
+        assertThat(jdbc.queryForObject(
+                "select count(*) from outbox where event_type = 'BOOKING_CANCELLED'", Integer.class))
+                .isZero();
+    }
+
+    @Test
     void checkoutDayIsTakenForNextGuest() throws Exception {
         Long masha = guest("+81320000005", 777105L);
         Long petya = guest("+81320000006", 777106L);
