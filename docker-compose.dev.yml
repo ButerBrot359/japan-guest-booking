@@ -48,6 +48,9 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/guestbooking
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      BOT_API_TOKEN: ${BOT_API_TOKEN}
+    env_file:
+      - ./.env   # BOT_API_TOKEN — локальный секрет, в git не попадает
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,11 +63,15 @@ services:
     environment:
       # перекрывает KAFKA_BROKERS из .env: внутри docker-сети брокер — kafka:19092
       KAFKA_BROKERS: kafka:19092
+      BACKEND_URL: http://backend:8080
+      BOT_API_TOKEN: ${BOT_API_TOKEN}
     env_file:
-      - ./.env   # BOT_TOKEN — локальный секрет, в git не попадает
+      - ./.env   # BOT_TOKEN, BOT_API_TOKEN — локальные секреты, в git не попадают
     depends_on:
       kafka:
         condition: service_healthy
+      backend:
+        condition: service_started
 
   frontend:
     build: ./frontend
