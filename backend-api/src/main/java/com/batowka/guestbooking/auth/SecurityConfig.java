@@ -1,5 +1,6 @@
 package com.batowka.guestbooking.auth;
 
+import com.batowka.guestbooking.bot.BotTokenFilter;
 import com.batowka.guestbooking.common.ApiError;
 import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,6 +26,7 @@ import java.io.IOException;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final BotTokenFilter botTokenFilter;
     private final ObjectMapper objectMapper;
 
     @Bean
@@ -34,6 +36,7 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/calendar", "/api/auth/**", "/api/access-requests").permitAll()
+                        .requestMatchers("/api/bot/**").hasRole("BOT")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll())
@@ -42,7 +45,10 @@ public class SecurityConfig {
                                 writeError(res, 401, "UNAUTHORIZED", "Требуется вход"))
                         .accessDeniedHandler((req, res, ex) ->
                                 writeError(res, 403, "FORBIDDEN", "Недостаточно прав")))
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                // JwtAuthFilter регистрируется первым, чтобы у него появился известный порядок —
+                // иначе addFilterBefore(botTokenFilter, JwtAuthFilter.class) не знает, куда встать.
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(botTokenFilter, JwtAuthFilter.class);
         return http.build();
     }
 

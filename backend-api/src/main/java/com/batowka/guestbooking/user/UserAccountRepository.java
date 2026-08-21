@@ -9,4 +9,6 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
     Optional<UserAccount> findByPhone(String phone);
 
     Optional<UserAccount> findByPhoneAndDeletedAtIsNull(String phone);
+
+    Optional<UserAccount> findByTelegramChatIdAndDeletedAtIsNull(Long telegramChatId);
 }
