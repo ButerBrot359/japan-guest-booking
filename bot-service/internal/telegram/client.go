@@ -105,6 +105,34 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, req
 	return sent.MessageID, nil
 }
 
+// Тексты кнопок гостевого меню; общие для сборки клавиатуры и матчинга в poller.
+const (
+	MenuBookings = "📋 Мои записи"
+	MenuHistory  = "🗺 История"
+)
+
+// SendMenu — сообщение с постоянной reply-клавиатурой гостевого меню.
+func (c *Client) SendMenu(ctx context.Context, chatID int64, text string) (int64, error) {
+	body := map[string]any{
+		"chat_id": chatID,
+		"text":    text,
+		"reply_markup": map[string]any{
+			"keyboard": [][]map[string]any{{
+				{"text": MenuBookings}, {"text": MenuHistory},
+			}},
+			"resize_keyboard": true,
+			"is_persistent":   true,
+		},
+	}
+	var sent struct {
+		MessageID int64 `json:"message_id"`
+	}
+	if err := c.post(ctx, "/sendMessage", body, &sent); err != nil {
+		return 0, err
+	}
+	return sent.MessageID, nil
+}
+
 func (c *Client) DeleteMessage(ctx context.Context, chatID, messageID int64) error {
 	return c.post(ctx, "/deleteMessage",
 		map[string]any{"chat_id": chatID, "message_id": messageID}, nil)

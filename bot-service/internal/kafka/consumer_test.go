@@ -25,6 +25,10 @@ func (f *fakeSender) SendMessage(ctx context.Context, chatID int64, text string,
 	return f.nextID, nil
 }
 
+func (f *fakeSender) SendMenu(ctx context.Context, chatID int64, text string) (int64, error) {
+	return f.SendMessage(ctx, chatID, text, false)
+}
+
 func (f *fakeSender) DeleteMessage(ctx context.Context, chatID, messageID int64) error {
 	if f.deleteErr != nil {
 		return f.deleteErr
@@ -45,6 +49,10 @@ func (f *flakySender) SendMessage(ctx context.Context, chatID int64, text string
 	}
 	f.sent = append(f.sent, text)
 	return int64(len(f.sent)), nil
+}
+
+func (f *flakySender) SendMenu(ctx context.Context, chatID int64, text string) (int64, error) {
+	return f.SendMessage(ctx, chatID, text, false)
 }
 
 func (f *flakySender) DeleteMessage(ctx context.Context, chatID, messageID int64) error { return nil }
@@ -318,6 +326,10 @@ func (f *countingFlakySender) SendMessage(ctx context.Context, chatID int64, tex
 	}
 	f.sent = append(f.sent, text)
 	return int64(len(f.sent)), nil
+}
+
+func (f *countingFlakySender) SendMenu(ctx context.Context, chatID int64, text string) (int64, error) {
+	return f.SendMessage(ctx, chatID, text, false)
 }
 
 func (f *countingFlakySender) DeleteMessage(ctx context.Context, chatID, messageID int64) error {

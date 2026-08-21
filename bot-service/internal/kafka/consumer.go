@@ -27,6 +27,7 @@ func ruDate(iso string) string {
 // Sender — минимум, который нужен для доставки уведомления (telegram.Client подходит).
 type Sender interface {
 	SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (messageID int64, err error)
+	SendMenu(ctx context.Context, chatID int64, text string) (messageID int64, err error)
 	DeleteMessage(ctx context.Context, chatID, messageID int64) error
 }
 
@@ -85,8 +86,11 @@ func (c *consumerCore) handle(ctx context.Context, raw []byte) error {
 		}
 		text := "Привет, " + w.Name + "! Telegram привязан — теперь сюда будут " +
 			"приходить коды подтверждения и уведомления о бронях."
-		_, err := c.send(ctx, env.EventID, w.ChatID, text)
-		return err
+		if _, err := c.sender.SendMenu(ctx, w.ChatID, text); err != nil {
+			return err
+		}
+		c.remember(env.EventID)
+		return nil
 	case "OTP_CODE":
 		var p events.OtpCode
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
