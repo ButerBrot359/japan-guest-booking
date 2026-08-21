@@ -1,8 +1,8 @@
 package com.batowka.guestbooking.auth;
 
-import com.batowka.guestbooking.booking.BookingRepository;
 import com.batowka.guestbooking.booking.BookingService;
 import com.batowka.guestbooking.booking.BookingStatus;
+import com.batowka.guestbooking.booking.GuestBookingsService;
 import com.batowka.guestbooking.user.Role;
 import com.batowka.guestbooking.user.UserAccount;
 import com.batowka.guestbooking.user.UserAccountRepository;
@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @RestController
@@ -23,7 +22,7 @@ public class MeController {
 
     private final UserAccountRepository users;
     private final BookingService bookingService;
-    private final BookingRepository bookings;
+    private final GuestBookingsService guestBookings;
     private final WhitelistService whitelist;
 
     public record ActiveBooking(long id, LocalDate checkIn, LocalDate checkOut, BookingStatus status) {
@@ -63,15 +62,13 @@ public class MeController {
         users.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
                 .orElseThrow(UserGoneException::new);
-        ActiveBookingDetails active = bookingService.activeBooking(userId)
+        GuestBookingsService.Snapshot snap = guestBookings.load(userId);
+        ActiveBookingDetails active = snap.active()
                 .map(b -> new ActiveBookingDetails(b.getId(), b.getCheckIn(), b.getCheckOut(),
                         b.getStatus(), b.getComment()))
                 .orElse(null);
-        List<PastVisit> history = bookings
-                .findByUserIdAndStatusOrderByCheckInDesc(userId, BookingStatus.COMPLETED)
-                .stream()
-                .map(b -> new PastVisit(b.getCheckIn(), b.getCheckOut(),
-                        ChronoUnit.DAYS.between(b.getCheckIn(), b.getCheckOut())))
+        List<PastVisit> history = snap.history().stream()
+                .map(v -> new PastVisit(v.checkIn(), v.checkOut(), v.nights()))
                 .toList();
         return new MyBookingsResponse(active, history);
     }
