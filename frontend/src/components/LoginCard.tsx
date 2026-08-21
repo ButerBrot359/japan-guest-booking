@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { ApiError } from '../api/client'
 import { useAccessRequest, useLogin } from '../api/queries'
-import { formatPhone, phoneDigits, toApiPhone } from '../lib/phone'
+import { caretAfterDigits, formatPhone, phoneDigits, toApiPhone } from '../lib/phone'
 
 export function LoginCard() {
   const [digits, setDigits] = useState('')
@@ -9,22 +9,43 @@ export function LoginCard() {
   const [message, setMessage] = useState('')
   const login = useLogin()
   const request = useAccessRequest()
+  const phoneRef = useRef<HTMLInputElement | null>(null)
+  const caretRef = useRef<number | null>(null)
+
+  // Контролируемый инпут с маской после ререндера кидает курсор в конец —
+  // возвращаем его на позицию, вычисленную в onChange
+  useLayoutEffect(() => {
+    if (caretRef.current != null && phoneRef.current != null) {
+      phoneRef.current.setSelectionRange(caretRef.current, caretRef.current)
+      caretRef.current = null
+    }
+  })
 
   const loginCode = login.error instanceof ApiError ? login.error.code : null
   const requestCode = request.error instanceof ApiError ? request.error.code : null
   const showRequestForm = loginCode === 'UNKNOWN_PHONE'
 
   return (
-    <div className="mb-4">
+    <div>
       <div className="rounded-2xl bg-card p-4">
-        <div className="mb-2 text-sm">Вход для своих</div>
         <input
+          ref={phoneRef}
           data-testid="phone-input"
           className="w-full rounded-xl border border-muted/40 bg-paper p-2 text-sm"
           placeholder="+7 (___) ___-__-__"
           inputMode="tel"
           value={formatPhone(digits)}
-          onChange={(e) => setDigits(phoneDigits(e.target.value))}
+          onChange={(e) => {
+            const raw = e.target.value
+            const caret = e.target.selectionStart ?? raw.length
+            const digitsBeforeCaret = phoneDigits(raw.slice(0, caret)).length
+            const next = phoneDigits(raw)
+            caretRef.current = caretAfterDigits(
+              formatPhone(next),
+              Math.min(digitsBeforeCaret, next.length),
+            )
+            setDigits(next)
+          }}
         />
         <button
           type="button"
@@ -49,7 +70,7 @@ export function LoginCard() {
       </div>
 
       {showRequestForm && (
-        <div className="mt-2 rounded-2xl border border-hanko/40 bg-hanko/5 p-4">
+        <div className="mt-2 rounded-2xl border border-hanko/40 bg-hankobg p-4">
           {request.isSuccess ? (
             <p className="text-sm">Заявка отправлена — владелец свяжется с тобой.</p>
           ) : (

@@ -76,3 +76,26 @@ test('повторный вход сбрасывает состояние про
   expect(screen.queryByText(/Заявка отправлена/)).not.toBeInTheDocument()
   expect(nameInput).toHaveValue('')
 })
+
+test('правка цифры в середине номера не разъезжается (курсор управляется)', async () => {
+  renderCard()
+  const input = screen.getByTestId('phone-input') as HTMLInputElement
+  await userEvent.type(input, '7787886462')
+  expect(input).toHaveValue('+7 (778) 788-64-62')
+  // ошиблись в девятой цифре: выделяем «6» (индекс 16) и печатаем «3»
+  await userEvent.type(input, '3', { initialSelectionStart: 16, initialSelectionEnd: 17 })
+  expect(input).toHaveValue('+7 (778) 788-64-32')
+  // курсор остался сразу после исправленной цифры, а не упрыгал в конец
+  expect(input.selectionStart).toBe(17)
+})
+
+test('вставка цифры в середину встаёт на своё место', async () => {
+  renderCard()
+  const input = screen.getByTestId('phone-input') as HTMLInputElement
+  await userEvent.type(input, '778788643')
+  expect(input).toHaveValue('+7 (778) 788-64-3')
+  // забыли цифру «6» после «788-»: ставим курсор перед «6» (индекс 13) и печатаем
+  await userEvent.type(input, '6', { initialSelectionStart: 13, initialSelectionEnd: 13 })
+  expect(input).toHaveValue('+7 (778) 788-66-43')
+  expect(input.selectionStart).toBe(14)
+})

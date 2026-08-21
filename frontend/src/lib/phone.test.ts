@@ -1,4 +1,4 @@
-import { formatPhone, phoneDigits, toApiPhone } from './phone'
+import { caretAfterDigits, formatPhone, phoneDigits, toApiPhone } from './phone'
 
 it('формат полного номера', () =>
   expect(formatPhone('7787886432')).toBe('+7 (778) 788-64-32'))
@@ -34,4 +34,16 @@ it('overflow: лишний символ после полных 10 цифр иг
 
 it('overflow: лишний символ игнорируется (номер на 9)', () => {
   expect(phoneDigits(formatPhone('9990001122') + '3')).toBe('9990001122')
+})
+
+it('caretAfterDigits: позиция после k-й значащей цифры', () => {
+  const full = formatPhone('7787886432') // '+7 (778) 788-64-32'
+  expect(caretAfterDigits(full, 0)).toBe(4) // после '+7 ('
+  expect(caretAfterDigits(full, 1)).toBe(5) // после первой '7' номера
+  expect(caretAfterDigits(full, 3)).toBe(7) // после '778'
+  expect(caretAfterDigits(full, 4)).toBe(10) // '788…' — разделитель ') ' пропущен
+  expect(caretAfterDigits(full, 9)).toBe(17) // после девятой цифры номера
+  expect(caretAfterDigits(full, 10)).toBe(full.length)
+  expect(caretAfterDigits('', 0)).toBe(0)
+  expect(caretAfterDigits('+7 (77', 2)).toBe(6)
 })

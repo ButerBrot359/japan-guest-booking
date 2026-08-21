@@ -28,3 +28,21 @@ export function formatPhone(digits: string): string {
 export function toApiPhone(digits: string): string {
   return '+7' + digits
 }
+
+/**
+ * Позиция курсора в отформатированном значении сразу после k-й значащей цифры
+ * (семёрка префикса '+7' не считается). k=0 — сразу после '+7 ('.
+ * Нужна, чтобы при правке середины номера курсор не упрыгивал в конец.
+ */
+export function caretAfterDigits(formatted: string, k: number): number {
+  if (k <= 0) return Math.min(4, formatted.length)
+  let digitNo = 0
+  for (let i = 0; i < formatted.length; i++) {
+    const ch = formatted[i]
+    if (ch >= '0' && ch <= '9') {
+      digitNo++
+      if (digitNo - 1 === k) return i + 1
+    }
+  }
+  return formatted.length
+}

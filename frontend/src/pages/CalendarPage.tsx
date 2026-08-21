@@ -218,7 +218,11 @@ export function CalendarPage() {
         </div>
       </div>
 
-      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      <LoginModal
+        open={loginOpen}
+        title={pendingDate != null ? 'Войдите, чтобы выбрать даты' : 'Вход'}
+        onClose={() => setLoginOpen(false)}
+      />
 
       {bothPicked && me.data != null && (flow.kind === 'idle' || flow.kind === 'selecting-reschedule') && (
         <BookingSheet
