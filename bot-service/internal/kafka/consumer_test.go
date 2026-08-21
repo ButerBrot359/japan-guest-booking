@@ -13,11 +13,13 @@ import (
 )
 
 type fakeSender struct {
-	sent      []string
-	nextID    int64
-	deleted   []int64 // message_id удалённых сообщений
-	deleteErr error   // если задана — DeleteMessage падает этой ошибкой
-	menuSent  bool    // true, если последняя отправка прошла через SendMenu
+	sent          []string
+	nextID        int64
+	deleted       []int64 // message_id удалённых сообщений
+	deleteErr     error   // если задана — DeleteMessage падает этой ошибкой
+	menuSent      bool    // true, если последняя отправка прошла через SendMenu
+	approvalReqID int64   // request_id последнего SendApprovalButtons
+	approvalCalls int
 }
 
 func (f *fakeSender) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (int64, error) {
@@ -43,6 +45,14 @@ func (f *fakeSender) DeleteMessage(ctx context.Context, chatID, messageID int64)
 	return nil
 }
 
+func (f *fakeSender) SendApprovalButtons(ctx context.Context, chatID int64, text string, requestID int64) (int64, error) {
+	f.approvalCalls++
+	f.approvalReqID = requestID
+	f.sent = append(f.sent, text)
+	f.nextID++
+	return f.nextID, nil
+}
+
 type flakySender struct {
 	failFirst bool
 	sent      []string
@@ -62,6 +72,10 @@ func (f *flakySender) SendMenu(ctx context.Context, chatID int64, text string) (
 }
 
 func (f *flakySender) DeleteMessage(ctx context.Context, chatID, messageID int64) error { return nil }
+
+func (f *flakySender) SendApprovalButtons(ctx context.Context, chatID int64, text string, requestID int64) (int64, error) {
+	return f.SendMessage(ctx, chatID, text, false)
+}
 
 func welcomeJSON(eventID string) []byte {
 	return []byte(`{"event_id":"` + eventID + `","occurred_at":"2026-08-19T12:00:00Z",` +
@@ -317,6 +331,22 @@ func TestAccessRequestReceivedRender(t *testing.T) {
 	}
 }
 
+func TestAccessRequestHasApprovalButtons(t *testing.T) {
+	sender := &fakeSender{}
+	c := newConsumerCore(sender)
+
+	_ = c.handle(context.Background(), eventJSON("e-ar", "ACCESS_REQUEST_RECEIVED",
+		`{"chat_id":900,"request_id":42,"name":"Незнакомец","phone":"+81300000001","message":"друг Миши"}`))
+
+	if sender.approvalCalls != 1 || sender.approvalReqID != 42 {
+		t.Fatalf("ожидал одно сообщение с кнопками для заявки 42: calls=%d id=%d",
+			sender.approvalCalls, sender.approvalReqID)
+	}
+	if len(sender.sent) != 1 || !strings.Contains(sender.sent[0], "Незнакомец") {
+		t.Fatalf("ожидал текст заявки: %v", sender.sent)
+	}
+}
+
 // countingFlakySender падает первые failTimes вызовов, затем отправляет успешно.
 type countingFlakySender struct {
 	failTimes int
@@ -343,6 +373,10 @@ func (f *countingFlakySender) SendMenu(ctx context.Context, chatID int64, text s
 
 func (f *countingFlakySender) DeleteMessage(ctx context.Context, chatID, messageID int64) error {
 	return nil
+}
+
+func (f *countingFlakySender) SendApprovalButtons(ctx context.Context, chatID int64, text string, requestID int64) (int64, error) {
+	return f.SendMessage(ctx, chatID, text, false)
 }
 
 func (f *countingFlakySender) snapshot() (calls int, sent []string) {

@@ -29,6 +29,7 @@ type Sender interface {
 	SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (messageID int64, err error)
 	SendMenu(ctx context.Context, chatID int64, text string) (messageID int64, err error)
 	DeleteMessage(ctx context.Context, chatID, messageID int64) error
+	SendApprovalButtons(ctx context.Context, chatID int64, text string, requestID int64) (messageID int64, err error)
 }
 
 // consumerCore — логика обработки без Kafka-транспорта (тестируется юнитами).
@@ -145,8 +146,11 @@ func (c *consumerCore) handle(ctx context.Context, raw []byte) error {
 		if p.Message != "" {
 			text += "\nКомментарий: " + p.Message
 		}
-		_, err := c.send(ctx, env.EventID, p.ChatID, text)
-		return err
+		if _, err := c.sender.SendApprovalButtons(ctx, p.ChatID, text, p.RequestID); err != nil {
+			return err
+		}
+		c.remember(env.EventID)
+		return nil
 	default:
 		log.Printf("незнакомый event_type %q — пропускаю (совместимость вперёд)", env.EventType)
 		return nil
