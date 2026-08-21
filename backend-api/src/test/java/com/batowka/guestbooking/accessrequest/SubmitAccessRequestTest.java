@@ -41,6 +41,10 @@ class SubmitAccessRequestTest extends AbstractIntegrationTest {
                 select payload->'payload'->>'name' from outbox
                 where event_type = 'ACCESS_REQUEST_RECEIVED'
                 """, String.class)).isEqualTo("Незнакомец");
+        assertThat(jdbc.queryForObject("""
+                select (payload->'payload'->>'request_id')::bigint from outbox
+                where event_type = 'ACCESS_REQUEST_RECEIVED'
+                """, Long.class)).isPositive();
     }
 
     @Test

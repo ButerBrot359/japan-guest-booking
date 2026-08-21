@@ -159,6 +159,7 @@ func (p *Poller) sendMenuReply(ctx context.Context, chatID int64, format func(ba
 // Не возвращает ошибку: callback не передоставляется как message, а approve идемпотентен.
 func (p *Poller) handleCallback(ctx context.Context, cb *CallbackQuery) {
 	if cb.Message == nil {
+		p.answer(ctx, cb.ID, "Не получилось 🙏")
 		return
 	}
 	action, id, ok := parseCallback(cb.Data)
