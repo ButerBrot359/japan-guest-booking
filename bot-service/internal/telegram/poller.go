@@ -68,7 +68,7 @@ func (p *Poller) handle(ctx context.Context, u Update) error {
 	}
 	switch {
 	case m.Text == "/start":
-		if err := p.api.SendMessage(ctx, m.Chat.ID,
+		if _, err := p.api.SendMessage(ctx, m.Chat.ID,
 			"Привет! Чтобы получать коды подтверждения и уведомления о бронях, "+
 				"поделись, пожалуйста, своим контактом.", true); err != nil {
 			log.Printf("sendMessage /start: %v", err)
@@ -87,7 +87,7 @@ func (p *Poller) handle(ctx context.Context, u Update) error {
 			log.Printf("publish CONTACT_SHARED: %v", err)
 			return err
 		}
-		if err := p.api.SendMessage(ctx, m.Chat.ID,
+		if _, err := p.api.SendMessage(ctx, m.Chat.ID,
 			"Принял! Если твой номер в списке гостей — сейчас придёт подтверждение.",
 			false); err != nil {
 			log.Printf("sendMessage ack: %v", err)

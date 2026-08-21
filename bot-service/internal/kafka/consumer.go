@@ -26,7 +26,8 @@ func ruDate(iso string) string {
 
 // Sender — минимум, который нужен для доставки уведомления (telegram.Client подходит).
 type Sender interface {
-	SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) error
+	SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (messageID int64, err error)
+	DeleteMessage(ctx context.Context, chatID, messageID int64) error
 }
 
 // consumerCore — логика обработки без Kafka-транспорта (тестируется юнитами).
@@ -34,12 +35,16 @@ type consumerCore struct {
 	sender Sender
 	seen   map[string]bool
 	order  []string
+	// chat_id → message_id последнего отправленного кода: новый код вытесняет
+	// старый в БД, поэтому и сообщение со старым кодом из чата убираем.
+	// In-memory: после рестарта бота одно старое сообщение может остаться — приемлемо.
+	lastOtp map[int64]int64
 }
 
 const dedupCap = 1000
 
 func newConsumerCore(sender Sender) *consumerCore {
-	return &consumerCore{sender: sender, seen: make(map[string]bool)}
+	return &consumerCore{sender: sender, seen: make(map[string]bool), lastOtp: make(map[int64]int64)}
 }
 
 func (c *consumerCore) handle(ctx context.Context, raw []byte) error {
@@ -60,7 +65,8 @@ func (c *consumerCore) handle(ctx context.Context, raw []byte) error {
 		}
 		text := "Привет, " + w.Name + "! Telegram привязан — теперь сюда будут " +
 			"приходить коды подтверждения и уведомления о бронях."
-		return c.send(ctx, env.EventID, w.ChatID, text)
+		_, err := c.send(ctx, env.EventID, w.ChatID, text)
+		return err
 	case "OTP_CODE":
 		var p events.OtpCode
 		if err := json.Unmarshal(env.Payload, &p); err != nil {
@@ -71,7 +77,21 @@ func (c *consumerCore) handle(ctx context.Context, raw []byte) error {
 		if p.Action == "LOGIN" {
 			text = "Код для входа: " + p.Code + ". Действует 5 минут."
 		}
-		return c.send(ctx, env.EventID, p.ChatID, text)
+		// прошлый код уже вытеснен в БД — его сообщение убираем, чтобы чат
+		// не превращался в свалку недействительных кодов; best-effort:
+		// сообщение могли удалить руками, доставку нового кода это не блокирует
+		if prevID, ok := c.lastOtp[p.ChatID]; ok {
+			if err := c.sender.DeleteMessage(ctx, p.ChatID, prevID); err != nil {
+				log.Printf("удаление старого сообщения с кодом: %v", err)
+			}
+			delete(c.lastOtp, p.ChatID)
+		}
+		msgID, err := c.send(ctx, env.EventID, p.ChatID, text)
+		if err != nil {
+			return err
+		}
+		c.lastOtp[p.ChatID] = msgID
+		return nil
 	case "BOOKING_CONFIRMED":
 		return c.renderBooking(ctx, env, "Бронь подтверждена")
 	case "BOOKING_CANCELLED":
@@ -88,7 +108,8 @@ func (c *consumerCore) handle(ctx context.Context, raw []byte) error {
 		if p.Message != "" {
 			text += "\nКомментарий: " + p.Message
 		}
-		return c.send(ctx, env.EventID, p.ChatID, text)
+		_, err := c.send(ctx, env.EventID, p.ChatID, text)
+		return err
 	default:
 		log.Printf("незнакомый event_type %q — пропускаю (совместимость вперёд)", env.EventType)
 		return nil
@@ -104,12 +125,13 @@ func (c *consumerCore) remember(eventID string) {
 	}
 }
 
-func (c *consumerCore) send(ctx context.Context, eventID string, chatID int64, text string) error {
-	if err := c.sender.SendMessage(ctx, chatID, text, false); err != nil {
-		return err
+func (c *consumerCore) send(ctx context.Context, eventID string, chatID int64, text string) (int64, error) {
+	msgID, err := c.sender.SendMessage(ctx, chatID, text, false)
+	if err != nil {
+		return 0, err
 	}
 	c.remember(eventID)
-	return nil
+	return msgID, nil
 }
 
 func (c *consumerCore) renderBooking(ctx context.Context, env events.Envelope, prefix string) error {
@@ -121,8 +143,9 @@ func (c *consumerCore) renderBooking(ctx context.Context, env events.Envelope, p
 	if p.By == "ADMIN" {
 		prefix += " владельцем"
 	}
-	return c.send(ctx, env.EventID, p.ChatID,
+	_, err := c.send(ctx, env.EventID, p.ChatID,
 		prefix+": "+p.GuestName+", заезд "+ruDate(p.CheckIn)+", выезд "+ruDate(p.CheckOut)+".")
+	return err
 }
 
 // kafkaReader — минимум от *kafkago.Reader, нужный Run (позволяет подменить фейком в тестах).

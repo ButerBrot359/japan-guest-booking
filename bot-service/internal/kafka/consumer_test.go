@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -12,11 +13,23 @@ import (
 )
 
 type fakeSender struct {
-	sent []string
+	sent      []string
+	nextID    int64
+	deleted   []int64 // message_id удалённых сообщений
+	deleteErr error   // если задана — DeleteMessage падает этой ошибкой
 }
 
-func (f *fakeSender) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) error {
+func (f *fakeSender) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (int64, error) {
 	f.sent = append(f.sent, text)
+	f.nextID++
+	return f.nextID, nil
+}
+
+func (f *fakeSender) DeleteMessage(ctx context.Context, chatID, messageID int64) error {
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
+	f.deleted = append(f.deleted, messageID)
 	return nil
 }
 
@@ -25,14 +38,16 @@ type flakySender struct {
 	sent      []string
 }
 
-func (f *flakySender) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) error {
+func (f *flakySender) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (int64, error) {
 	if f.failFirst {
 		f.failFirst = false
-		return context.DeadlineExceeded // любая ошибка
+		return 0, context.DeadlineExceeded // любая ошибка
 	}
 	f.sent = append(f.sent, text)
-	return nil
+	return int64(len(f.sent)), nil
 }
+
+func (f *flakySender) DeleteMessage(ctx context.Context, chatID, messageID int64) error { return nil }
 
 func welcomeJSON(eventID string) []byte {
 	return []byte(`{"event_id":"` + eventID + `","occurred_at":"2026-08-19T12:00:00Z",` +
@@ -121,6 +136,48 @@ func TestOtpCodeLoginText(t *testing.T) {
 	}
 }
 
+func otpJSON(id string, chatID int64, code string) []byte {
+	return eventJSON(id, "OTP_CODE",
+		`{"chat_id":`+fmt.Sprint(chatID)+`,"code":"`+code+`","action":"LOGIN","expires_at":"2026-01-01T00:05:00Z"}`)
+}
+
+// Новый код вытесняет старый и в БД — сообщение со старым кодом удаляем,
+// чтобы чат не превращался в свалку недействительных кодов.
+func TestNewOtpDeletesPreviousCodeMessage(t *testing.T) {
+	sender := &fakeSender{}
+	c := newConsumerCore(sender)
+
+	_ = c.handle(context.Background(), otpJSON("e-o1", 555, "111111"))
+	_ = c.handle(context.Background(), otpJSON("e-o2", 555, "222222"))
+
+	if len(sender.deleted) != 1 || sender.deleted[0] != 1 {
+		t.Fatalf("ожидал удаление первого сообщения (id=1): %v", sender.deleted)
+	}
+	if len(sender.sent) != 2 {
+		t.Fatalf("оба кода должны быть отправлены: %v", sender.sent)
+	}
+
+	// код в другой чат не трогает чужие сообщения
+	_ = c.handle(context.Background(), otpJSON("e-o3", 777, "333333"))
+	if len(sender.deleted) != 1 {
+		t.Fatalf("чужой чат удаляться не должен: %v", sender.deleted)
+	}
+}
+
+// Старое сообщение могли удалить руками — сбой удаления не должен блокировать доставку кода.
+func TestOtpDeleteFailureDoesNotBlockSend(t *testing.T) {
+	sender := &fakeSender{deleteErr: errors.New("message to delete not found")}
+	c := newConsumerCore(sender)
+
+	_ = c.handle(context.Background(), otpJSON("e-d1", 555, "111111"))
+	if err := c.handle(context.Background(), otpJSON("e-d2", 555, "222222")); err != nil {
+		t.Fatalf("сбой удаления не должен ронять обработку: %v", err)
+	}
+	if len(sender.sent) != 2 {
+		t.Fatalf("оба кода должны дойти несмотря на сбой удаления: %v", sender.sent)
+	}
+}
+
 func TestBookingEventsAreRendered(t *testing.T) {
 	sender := &fakeSender{}
 	c := newConsumerCore(sender)
@@ -186,14 +243,18 @@ type countingFlakySender struct {
 	sent  []string
 }
 
-func (f *countingFlakySender) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) error {
+func (f *countingFlakySender) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
 	if f.calls <= f.failTimes {
-		return errors.New("временный сбой отправки")
+		return 0, errors.New("временный сбой отправки")
 	}
 	f.sent = append(f.sent, text)
+	return int64(len(f.sent)), nil
+}
+
+func (f *countingFlakySender) DeleteMessage(ctx context.Context, chatID, messageID int64) error {
 	return nil
 }
 

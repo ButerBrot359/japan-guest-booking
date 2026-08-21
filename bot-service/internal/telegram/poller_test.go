@@ -17,11 +17,11 @@ func (f *fakeAPI) GetUpdates(ctx context.Context, offset int64) ([]Update, error
 	return nil, nil
 }
 
-func (f *fakeAPI) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) error {
+func (f *fakeAPI) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (int64, error) {
 	f.sent = append(f.sent, text)
 	f.sentChatIDs = append(f.sentChatIDs, chatID)
 	f.contactButtons = append(f.contactButtons, requestContact)
-	return nil
+	return int64(len(f.sent)), nil
 }
 
 type fakePublisher struct {
@@ -119,8 +119,8 @@ func (a *sequencedAPI) GetUpdates(ctx context.Context, offset int64) ([]Update, 
 	return nil, ctx.Err()
 }
 
-func (a *sequencedAPI) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) error {
-	return nil
+func (a *sequencedAPI) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (int64, error) {
+	return 1, nil
 }
 
 // flakyPublisher падает на первом вызове и успевает со второго.

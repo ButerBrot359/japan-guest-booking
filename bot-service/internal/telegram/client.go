@@ -38,10 +38,10 @@ type Contact struct {
 	UserID      int64  `json:"user_id"`
 }
 
-// API — то, что нужно поллеру и консьюмеру; Client её реализует.
+// API — то, что нужно поллеру; Client её реализует (консьюмер описывает свой Sender сам).
 type API interface {
 	GetUpdates(ctx context.Context, offset int64) ([]Update, error)
-	SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) error
+	SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (int64, error)
 }
 
 type Client struct {
@@ -82,7 +82,9 @@ func (c *Client) GetUpdates(ctx context.Context, offset int64) ([]Update, error)
 	return updates, nil
 }
 
-func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) error {
+// SendMessage возвращает message_id — он нужен консьюмеру, чтобы позже удалить
+// сообщение с устаревшим кодом.
+func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (int64, error) {
 	body := map[string]any{"chat_id": chatID, "text": text}
 	if requestContact {
 		body["reply_markup"] = map[string]any{
@@ -93,17 +95,32 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, req
 			"one_time_keyboard": true,
 		}
 	}
+	var sent struct {
+		MessageID int64 `json:"message_id"`
+	}
+	if err := c.post(ctx, "/sendMessage", body, &sent); err != nil {
+		return 0, err
+	}
+	return sent.MessageID, nil
+}
+
+func (c *Client) DeleteMessage(ctx context.Context, chatID, messageID int64) error {
+	return c.post(ctx, "/deleteMessage",
+		map[string]any{"chat_id": chatID, "message_id": messageID}, nil)
+}
+
+func (c *Client) post(ctx context.Context, method string, body map[string]any, result any) error {
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.base+"/sendMessage", bytes.NewReader(payload))
+		c.base+method, bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	return c.do(req, nil)
+	return c.do(req, result)
 }
 
 func (c *Client) do(req *http.Request, result any) error {

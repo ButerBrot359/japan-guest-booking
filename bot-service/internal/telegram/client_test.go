@@ -42,19 +42,43 @@ func TestSendMessageWithContactButton(t *testing.T) {
 			t.Errorf("неожиданный путь: %s", r.URL.Path)
 		}
 		json.NewDecoder(r.Body).Decode(&body)
-		w.Write([]byte(`{"ok":true,"result":{}}`))
+		w.Write([]byte(`{"ok":true,"result":{"message_id":41}}`))
 	}))
 	defer server.Close()
 
 	client := NewClient("TEST", server.URL)
-	if err := client.SendMessage(context.Background(), 555, "привет", true); err != nil {
+	msgID, err := client.SendMessage(context.Background(), 555, "привет", true)
+	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
+	}
+	if msgID != 41 {
+		t.Errorf("ожидал message_id=41 из ответа, получил %d", msgID)
 	}
 	if body["chat_id"].(float64) != 555 || body["text"].(string) != "привет" {
 		t.Errorf("тело неверное: %v", body)
 	}
 	if body["reply_markup"] == nil {
 		t.Error("ожидал reply_markup с кнопкой контакта")
+	}
+}
+
+func TestDeleteMessage(t *testing.T) {
+	var body map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/botTEST/deleteMessage" {
+			t.Errorf("неожиданный путь: %s", r.URL.Path)
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		w.Write([]byte(`{"ok":true,"result":true}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("TEST", server.URL)
+	if err := client.DeleteMessage(context.Background(), 555, 41); err != nil {
+		t.Fatalf("DeleteMessage: %v", err)
+	}
+	if body["chat_id"].(float64) != 555 || body["message_id"].(float64) != 41 {
+		t.Errorf("тело неверное: %v", body)
 	}
 }
 
