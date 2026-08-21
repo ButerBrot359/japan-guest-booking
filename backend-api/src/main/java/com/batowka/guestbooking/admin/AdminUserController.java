@@ -43,6 +43,11 @@ public class AdminUserController {
         whitelist.softDelete(id);
     }
 
+    @GetMapping("/{id}/greetings")
+    public List<String> greetings(@PathVariable long id) {
+        return whitelist.greetings(id);
+    }
+
     @PutMapping("/{id}/greetings")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void setGreetings(@PathVariable long id, @Valid @RequestBody GreetingsRequest body) {

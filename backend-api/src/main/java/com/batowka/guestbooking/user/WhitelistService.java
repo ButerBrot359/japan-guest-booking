@@ -98,6 +98,14 @@ public class WhitelistService {
                 });
     }
 
+    /** Список текущих приветствий гостя в порядке хранения. */
+    @Transactional(readOnly = true)
+    public List<String> greetings(long id) {
+        return greetingRepo.findByUserId(id).stream()
+                .map(UserGreeting::getText)
+                .toList();
+    }
+
     /** Случайное приветствие из набора; выбор в БД — order by random(). */
     public Optional<String> randomGreeting(Long userId) {
         return jdbc.query(
