@@ -14,15 +14,24 @@ import (
 )
 
 type Update struct {
-	UpdateID int64    `json:"update_id"`
-	Message  *Message `json:"message"`
+	UpdateID      int64          `json:"update_id"`
+	Message       *Message       `json:"message"`
+	CallbackQuery *CallbackQuery `json:"callback_query"`
 }
 
 type Message struct {
-	Chat    Chat     `json:"chat"`
+	MessageID int64    `json:"message_id"`
+	Chat      Chat     `json:"chat"`
+	From      *User    `json:"from"`
+	Text      string   `json:"text"`
+	Contact   *Contact `json:"contact"`
+}
+
+type CallbackQuery struct {
+	ID      string   `json:"id"`
 	From    *User    `json:"from"`
-	Text    string   `json:"text"`
-	Contact *Contact `json:"contact"`
+	Message *Message `json:"message"`
+	Data    string   `json:"data"`
 }
 
 type Chat struct {
@@ -45,6 +54,8 @@ type API interface {
 	SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (int64, error)
 	SendMenu(ctx context.Context, chatID int64, text string) (int64, error)
 	DeleteMessage(ctx context.Context, chatID, messageID int64) error
+	AnswerCallback(ctx context.Context, callbackID, text string) error
+	EditMessageText(ctx context.Context, chatID, messageID int64, text string) error
 }
 
 type Client struct {

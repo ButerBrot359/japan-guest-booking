@@ -16,6 +16,8 @@ type fakeAPI struct {
 	contactButtons []bool
 	deleted        []int64
 	menuTexts      []string // тексты, отправленные с меню-клавиатурой (SendMenu)
+	answered       []string // тексты answerCallbackQuery
+	editedTexts    []string // тексты editMessageText
 }
 
 func (f *fakeAPI) GetUpdates(ctx context.Context, offset int64) ([]Update, error) {
@@ -39,6 +41,16 @@ func (f *fakeAPI) DeleteMessage(ctx context.Context, chatID, messageID int64) er
 	return nil
 }
 
+func (f *fakeAPI) AnswerCallback(ctx context.Context, callbackID, text string) error {
+	f.answered = append(f.answered, text)
+	return nil
+}
+
+func (f *fakeAPI) EditMessageText(ctx context.Context, chatID, messageID int64, text string) error {
+	f.editedTexts = append(f.editedTexts, text)
+	return nil
+}
+
 type fakePublisher struct {
 	published []string // "chatID|phone|username"
 	err       error
@@ -59,10 +71,21 @@ func formatKey(chatID int64, phone, username string) string {
 type fakeFetcher struct {
 	gb  backend.GuestBookings
 	err error
+
+	resolveStatus int
+	resolveErr    error
+	resolvedID    int64
+	resolvedAct   string
 }
 
 func (f *fakeFetcher) GetGuestBookings(ctx context.Context, chatID int64) (backend.GuestBookings, error) {
 	return f.gb, f.err
+}
+
+func (f *fakeFetcher) ResolveAccessRequest(ctx context.Context, id int64, action string, adminChatID int64) (int, error) {
+	f.resolvedID = id
+	f.resolvedAct = action
+	return f.resolveStatus, f.resolveErr
 }
 
 func TestStartUnlinkedAsksForContact(t *testing.T) {
@@ -221,6 +244,14 @@ func (a *sequencedAPI) DeleteMessage(ctx context.Context, chatID, messageID int6
 	return nil
 }
 
+func (a *sequencedAPI) AnswerCallback(ctx context.Context, callbackID, text string) error {
+	return nil
+}
+
+func (a *sequencedAPI) EditMessageText(ctx context.Context, chatID, messageID int64, text string) error {
+	return nil
+}
+
 // flakyPublisher падает на первом вызове и успевает со второго.
 type flakyPublisher struct {
 	calls     int
@@ -282,5 +313,88 @@ func TestMenuButtonBackendErrorTellsRetry(t *testing.T) {
 
 	if len(api.sent) != 1 || !strings.Contains(api.sent[0], "попробуй позже") {
 		t.Fatalf("ожидал совет попробовать позже: %v", api.sent)
+	}
+}
+
+func TestCallbackApproveEditsMessage(t *testing.T) {
+	api := &fakeAPI{}
+	fetch := &fakeFetcher{resolveStatus: 204}
+	p := NewPoller(api, &fakePublisher{}, fetch)
+
+	p.handle(context.Background(), Update{CallbackQuery: &CallbackQuery{
+		ID: "cb1", Data: "approve:42",
+		Message: &Message{Chat: Chat{ID: 900}, MessageID: 15, Text: "Новая заявка: Незнакомец"}}})
+
+	if fetch.resolvedID != 42 || fetch.resolvedAct != "approve" {
+		t.Fatalf("ожидал вызов approve для 42: id=%d act=%s", fetch.resolvedID, fetch.resolvedAct)
+	}
+	if len(api.answered) != 1 {
+		t.Fatalf("ожидал answerCallbackQuery: %v", api.answered)
+	}
+	if len(api.editedTexts) != 1 || !strings.Contains(api.editedTexts[0], "Добавлен") {
+		t.Fatalf("ожидал правку сообщения на итог: %v", api.editedTexts)
+	}
+}
+
+func TestCallbackAlreadyResolved(t *testing.T) {
+	api := &fakeAPI{}
+	fetch := &fakeFetcher{resolveStatus: 409}
+	p := NewPoller(api, &fakePublisher{}, fetch)
+
+	p.handle(context.Background(), Update{CallbackQuery: &CallbackQuery{
+		ID: "cb1", Data: "reject:7",
+		Message: &Message{Chat: Chat{ID: 900}, MessageID: 15, Text: "Новая заявка"}}})
+
+	if len(api.answered) != 1 || !strings.Contains(api.answered[0], "уже") {
+		t.Fatalf("ожидал тост «уже обработана»: %v", api.answered)
+	}
+	if len(api.editedTexts) != 1 {
+		t.Fatalf("ожидал правку сообщения на «уже обработана»: %v", api.editedTexts)
+	}
+}
+
+func TestCallbackForbiddenDoesNotEdit(t *testing.T) {
+	api := &fakeAPI{}
+	fetch := &fakeFetcher{resolveStatus: 403}
+	p := NewPoller(api, &fakePublisher{}, fetch)
+
+	p.handle(context.Background(), Update{CallbackQuery: &CallbackQuery{
+		ID: "cb1", Data: "approve:7",
+		Message: &Message{Chat: Chat{ID: 555}, MessageID: 15, Text: "Новая заявка"}}})
+
+	if len(api.answered) != 1 || !strings.Contains(api.answered[0], "прав") {
+		t.Fatalf("ожидал тост про недостаточно прав: %v", api.answered)
+	}
+	if len(api.editedTexts) != 0 {
+		t.Fatalf("при 403 сообщение не трогаем: %v", api.editedTexts)
+	}
+}
+
+func TestCallbackNetworkErrorAsksRetry(t *testing.T) {
+	api := &fakeAPI{}
+	fetch := &fakeFetcher{resolveErr: errors.New("сеть легла")}
+	p := NewPoller(api, &fakePublisher{}, fetch)
+
+	p.handle(context.Background(), Update{CallbackQuery: &CallbackQuery{
+		ID: "cb1", Data: "approve:7",
+		Message: &Message{Chat: Chat{ID: 900}, MessageID: 15, Text: "Новая заявка"}}})
+
+	if len(api.answered) != 1 || !strings.Contains(api.answered[0], "ещё раз") {
+		t.Fatalf("ожидал тост «попробуй ещё раз»: %v", api.answered)
+	}
+	if len(api.editedTexts) != 0 {
+		t.Fatalf("при сетевой ошибке сообщение не трогаем: %v", api.editedTexts)
+	}
+}
+
+func TestCallbackBadDataAnswersConfused(t *testing.T) {
+	api := &fakeAPI{}
+	p := NewPoller(api, &fakePublisher{}, &fakeFetcher{})
+
+	p.handle(context.Background(), Update{CallbackQuery: &CallbackQuery{
+		ID: "cb1", Data: "мусор", Message: &Message{Chat: Chat{ID: 900}, MessageID: 15}}})
+
+	if len(api.answered) != 1 {
+		t.Fatalf("ожидал ответ на кривой callback: %v", api.answered)
 	}
 }
