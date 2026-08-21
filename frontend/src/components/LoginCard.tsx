@@ -45,6 +45,10 @@ export function LoginCard() {
   const verifyCode = verify.error instanceof ApiError ? verify.error.code : null
   const requestCode = request.error instanceof ApiError ? request.error.code : null
   const showRequestForm = loginCode === 'UNKNOWN_PHONE'
+  // на шаге кода ошибка может прийти либо от verify (неверный код), либо от
+  // повторного login при «Отправить новый» (например RATE_LIMITED) — мержим,
+  // как раньше OtpModal мержил confirm.error/resend.error
+  const codeStepErrorCode = verifyCode ?? loginCode
 
   const sendCode = () => {
     request.reset()
@@ -79,9 +83,9 @@ export function LoginCard() {
         >
           Войти
         </button>
-        {verifyCode && (
+        {codeStepErrorCode && (
           <p className="mt-2 text-center text-xs text-hanko">
-            {VERIFY_ERROR_TEXTS[verifyCode] ?? 'Не получилось — попробуй ещё раз'}
+            {VERIFY_ERROR_TEXTS[codeStepErrorCode] ?? 'Не получилось — попробуй ещё раз'}
           </p>
         )}
         <div className="mt-3 flex items-center justify-between text-xs">
@@ -94,7 +98,7 @@ export function LoginCard() {
             Отправить новый{cooldown > 0 ? ` (0:${String(cooldown).padStart(2, '0')})` : ''}
           </button>
           <button type="button" className="text-muted"
-            onClick={() => { verify.reset(); setStep('phone') }}>
+            onClick={() => { verify.reset(); login.reset(); setStep('phone') }}>
             Изменить номер
           </button>
         </div>

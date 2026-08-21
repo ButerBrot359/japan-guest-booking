@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
+import { vi } from 'vitest'
 import { server } from '../test/setup'
 import { mockState } from '../test/handlers'
 import { LoginCard } from './LoginCard'
@@ -56,6 +57,50 @@ test('«Изменить номер» возвращает на шаг теле�
   await userEvent.click(screen.getByRole('button', { name: 'Изменить номер' }))
   expect(screen.getByTestId('phone-input')).toBeInTheDocument()
   expect(screen.queryByLabelText('Код из Telegram')).not.toBeInTheDocument()
+})
+
+test('resend RATE_LIMITED на шаге кода тоже показывает «подожди минуту» (не проглатывается)', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderCard()
+    await user.type(screen.getByTestId('phone-input'), '7787886432')
+    await user.click(screen.getByRole('button', { name: 'Получить код' }))
+    await screen.findByLabelText('Код из Telegram')
+
+    // следующий POST /auth/login (вызванный кнопкой «Отправить новый») падает с 429
+    server.use(http.post('/api/auth/login', () =>
+      HttpResponse.json({ code: 'RATE_LIMITED', message: '' }, { status: 429 })))
+    // кулдаун после первой отправки — 60с, ждём его окончания
+    await vi.advanceTimersByTimeAsync(60_000)
+    await user.click(screen.getByRole('button', { name: /Отправить новый/ }))
+    expect(await screen.findByText('Слишком часто — подожди минуту.')).toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('«Изменить номер» сбрасывает залипшую ошибку resend — на шаге телефона её не видно', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderCard()
+    await user.type(screen.getByTestId('phone-input'), '7787886432')
+    await user.click(screen.getByRole('button', { name: 'Получить код' }))
+    await screen.findByLabelText('Код из Telegram')
+
+    server.use(http.post('/api/auth/login', () =>
+      HttpResponse.json({ code: 'RATE_LIMITED', message: '' }, { status: 429 })))
+    await vi.advanceTimersByTimeAsync(60_000)
+    await user.click(screen.getByRole('button', { name: /Отправить новый/ }))
+    await screen.findByText('Слишком часто — подожди минуту.')
+
+    await user.click(screen.getByRole('button', { name: 'Изменить номер' }))
+    expect(screen.getByTestId('phone-input')).toBeInTheDocument()
+    expect(screen.queryByText(/подожди минуту/)).not.toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test('UNKNOWN_PHONE раскрывает форму заявки', async () => {
