@@ -57,6 +57,7 @@ export function useCreateBooking() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['me'] })
       qc.invalidateQueries({ queryKey: ['calendar'] })
+      qc.invalidateQueries({ queryKey: ['my-bookings'] })
     },
   })
 }

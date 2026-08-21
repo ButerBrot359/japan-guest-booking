@@ -73,7 +73,7 @@ test('полный create-флоу: выбор дат → шторка → бр�
   seedFreeSeptember()
   seedMe({})
   renderApp()
-  await screen.findByText(/Привет, Маша!/)
+  await waitFor(() => expect(screen.getAllByText(/Привет, Маша!/).length).toBeGreaterThan(0))
 
   await clickFreeDayPair(['10', '13'])
   await userEvent.click(screen.getByRole('button', { name: 'Забронировать' }))

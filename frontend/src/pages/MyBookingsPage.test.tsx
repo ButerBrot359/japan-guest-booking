@@ -11,10 +11,26 @@ function loginWithBooking() {
   mockState.history = [{ checkIn: '2026-05-12', checkOut: '2026-05-19', nights: 7 }]
 }
 
-it('подвкладка Активная: карточка с комментарием, редактирование сохраняет', async () => {
+function gotoMyBookings() {
+  window.history.pushState({}, '', '/my-bookings')
+  return renderApp()
+}
+
+it('нет вкладок «Активная»/«История» — активная бронь и история видны одновременно', async () => {
   loginWithBooking()
-  renderApp()
-  await userEvent.click(await screen.findByRole('link', { name: 'Мои брони' }))
+  gotoMyBookings()
+  expect(await screen.findByText('Приеду с женой')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Активная' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'История' })).not.toBeInTheDocument()
+  expect(document.querySelector('[aria-pressed]')).not.toBeInTheDocument()
+  expect(screen.getByText('Прошлые поездки')).toBeInTheDocument()
+  expect(screen.getByText(/12\/05\/2026/)).toBeInTheDocument()
+  expect(screen.getByText(/7 ночей/)).toBeInTheDocument()
+})
+
+it('карточка с комментарием, редактирование сохраняет', async () => {
+  loginWithBooking()
+  gotoMyBookings()
   expect(await screen.findByText('Приеду с женой')).toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: /изменить комментарий/i }))
   const input = screen.getByLabelText(/комментарий/i)
@@ -24,26 +40,24 @@ it('подвкладка Активная: карточка с коммента�
   expect(await screen.findByText('Буду один')).toBeInTheDocument()
 })
 
-it('подвкладка История: список поездок с ночами', async () => {
-  loginWithBooking()
-  renderApp()
-  await userEvent.click(await screen.findByRole('link', { name: 'Мои брони' }))
-  await userEvent.click(await screen.findByRole('button', { name: 'История' }))
-  expect(await screen.findByText(/12\/05\/2026/)).toBeInTheDocument()
-  expect(screen.getByText(/7 ночей/)).toBeInTheDocument()
-})
-
 it('Перенести уводит на календарь в режиме переноса', async () => {
   loginWithBooking()
-  renderApp()
-  await userEvent.click(await screen.findByRole('link', { name: 'Мои брони' }))
+  gotoMyBookings()
   await userEvent.click(await screen.findByRole('button', { name: 'Перенести' }))
   expect(await screen.findByText(/выбери новые даты/i)).toBeInTheDocument()
 })
 
+it('отмена работает без кода — сразу подтверждение и запрос на удаление', async () => {
+  loginWithBooking()
+  gotoMyBookings()
+  await userEvent.click(await screen.findByRole('button', { name: 'Отменить' }))
+  expect(screen.queryByLabelText(/код/i)).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Да, отменить' }))
+  await waitFor(() => expect(screen.queryByText(/Отменить бронь/)).not.toBeInTheDocument())
+})
+
 it('анониму прямой заход на /my-bookings недоступен — редирект на календарь', async () => {
-  window.history.pushState({}, '', '/my-bookings')
-  renderApp()
+  gotoMyBookings()
   await waitFor(() => expect(window.location.pathname).toBe('/'))
   expect(await screen.findByText(/выбери даты/i)).toBeInTheDocument()
 })

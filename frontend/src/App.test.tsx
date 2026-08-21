@@ -14,7 +14,7 @@ test('рендерит шапку и календарь', async () => {
   expect(await screen.findByText(/выбери даты/)).toBeInTheDocument()
 })
 
-it('залогиненному видны вкладки Календарь и Мои брони', async () => {
+it('залогиненному на мобиле видны сегмент-вкладки Календарь и Мои брони', async () => {
   mockState.me = { phone: '+70000000001', name: 'Маша', role: 'FRIEND',
     telegramLinked: true, greeting: null, activeBooking: null }
   renderApp()
@@ -22,7 +22,7 @@ it('залогиненному видны вкладки Календарь и �
   expect(screen.getByRole('link', { name: 'Календарь' })).toBeInTheDocument()
 })
 
-it('анониму вкладка Мои брони не видна', async () => {
+it('анониму сегмент-вкладки Мои брони не видно', async () => {
   renderApp()
   await screen.findByText(/выбери даты/i)
   expect(screen.queryByRole('link', { name: 'Мои брони' })).not.toBeInTheDocument()

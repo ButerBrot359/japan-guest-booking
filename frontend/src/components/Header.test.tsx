@@ -19,9 +19,11 @@ function renderHeader(props: { me: Me | null; onLoginClick?: () => void }) {
   )
 }
 
-test('залогиненному в шапке видна кнопка «выйти»', () => {
+test('залогиненному в шапке видна кнопка «выйти», без ссылок навигации', () => {
   renderHeader({ me })
   expect(screen.getByRole('button', { name: 'выйти' })).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Календарь' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Мои брони' })).not.toBeInTheDocument()
 })
 
 test('анониму в шапке кнопка «выйти» не видна — только «Войти»', () => {

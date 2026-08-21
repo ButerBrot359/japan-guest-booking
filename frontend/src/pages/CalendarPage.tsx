@@ -2,21 +2,23 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { ApiError } from '../api/client'
 import {
-  useCalendar, useCancelBooking, useCreateBooking,
+  useCalendar, useCreateBooking,
   useMe, useRescheduleBooking,
 } from '../api/queries'
+import { ActiveBookingSection } from '../components/ActiveBookingSection'
 import { BookingSheet } from '../components/BookingSheet'
 import { Calendar, type Selection } from '../components/Calendar'
+import { Greeting } from '../components/Greeting'
 import { Header } from '../components/Header'
+import { HistoryList } from '../components/HistoryList'
 import { LoginModal } from '../components/LoginModal'
-import { ProfileCard } from '../components/ProfileCard'
+import { TabBar } from '../components/TabBar'
 import { addDays, addMonths, isoToRu, todayIso } from '../lib/dates'
 import { pickDay } from '../lib/selection'
 
 type Flow =
   | { kind: 'idle' }
   | { kind: 'selecting-reschedule' }
-  | { kind: 'confirm-cancel' }
   | { kind: 'celebrate'; checkIn: string; checkOut: string }
 
 export function CalendarPage() {
@@ -36,7 +38,6 @@ export function CalendarPage() {
   const calendar = useCalendar(yearFrom, yearTo)
   const create = useCreateBooking()
   const reschedule = useRescheduleBooking()
-  const cancel = useCancelBooking()
 
   const days = new Map((calendar.data?.days ?? []).map((d) => [d.date, d]))
   const active = me.data?.activeBooking ?? null
@@ -145,28 +146,33 @@ export function CalendarPage() {
   return (
     <div className={[
       'mx-auto max-w-md min-h-dvh bg-paper px-4 py-5',
-      'lg:max-w-[90rem] lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-10 lg:px-10',
+      me.data != null
+        ? 'lg:max-w-[90rem] lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-0 lg:px-10'
+        : 'lg:max-w-[90rem] lg:px-10',
       bothPicked ? 'pb-40' : 'pb-8',
     ].join(' ')}>
       <div className="lg:col-span-2">
         <Header me={me.data ?? null} onLoginClick={loginOpen ? undefined : () => setLoginOpen(true)} />
       </div>
 
-      <div className="lg:order-2 lg:sticky lg:top-6 lg:self-start">
-        {me.data != null && (
-          <ProfileCard
-            me={me.data}
-            onReschedule={() => switchFlow({ kind: 'selecting-reschedule' })}
-            onCancel={() => {
-              // открываем диалог отмены заново — прошлая ошибка неактуальна
-              cancel.reset()
-              setFlow({ kind: 'confirm-cancel' })
-            }}
-          />
-        )}
-      </div>
+      {me.data != null && (
+        <div className="hidden lg:order-2 lg:block lg:self-stretch lg:border-l lg:border-muted/30 lg:pl-8 lg:ml-8">
+          <div className="lg:sticky lg:top-6">
+            <Greeting me={me.data} />
+            <ActiveBookingSection onReschedule={() => switchFlow({ kind: 'selecting-reschedule' })} />
+            <HistoryList />
+          </div>
+        </div>
+      )}
 
       <div>
+        {me.data != null && (
+          <div className="lg:hidden">
+            <Greeting me={me.data} />
+            <TabBar />
+          </div>
+        )}
+
         {flow.kind === 'selecting-reschedule' && (
           <p className="mb-2 rounded-lg bg-card p-2 text-xs text-muted">
             Перенос: выбери новые даты в календаре.{' '}
@@ -221,26 +227,6 @@ export function CalendarPage() {
           pending={create.isPending || reschedule.isPending}
           errorCode={sheetErrorCode}
         />
-      )}
-
-      {flow.kind === 'confirm-cancel' && active && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-ink/25 p-6">
-          <div className="w-full max-w-xs rounded-2xl bg-paper p-4 text-sm shadow-xl">
-            <p className="mb-3">Отменить бронь {isoToRu(active.checkIn)} → {isoToRu(active.checkOut)}?</p>
-            <div className="flex gap-2 text-xs">
-              <button type="button" className="flex-1 rounded-lg border border-ink py-2"
-                onClick={() => setFlow({ kind: 'idle' })}>Оставить</button>
-              <button type="button" className="flex-1 rounded-lg bg-hanko py-2 text-paper disabled:opacity-50"
-                disabled={cancel.isPending}
-                onClick={() => cancel.mutate(active.id, { onSuccess: () => setFlow({ kind: 'idle' }) })}>
-                Да, отменить
-              </button>
-            </div>
-            {cancel.error instanceof ApiError && (
-              <p className="mt-2 text-xs text-hanko">Не получилось — попробуй ещё раз.</p>
-            )}
-          </div>
-        </div>
       )}
 
       {flow.kind === 'celebrate' && (
