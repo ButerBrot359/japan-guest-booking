@@ -29,6 +29,7 @@ public class AuthController {
     private final JwtService jwt;
     private final PasswordEncoder encoder;
     private final LoginRateLimiter rateLimiter;
+    private final LoginService loginService;
 
     public record LoginRequest(@NotBlank String phone) {
     }
@@ -39,12 +40,8 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<Void> login(@Valid @RequestBody LoginRequest body, HttpServletRequest request) {
         rateLimiter.check(request.getRemoteAddr());
-        String phone = Phones.normalize(body.phone()).orElseThrow(InvalidPhoneException::new);
-        // Роль ADMIN сюда не пускаем: беспарольный логин не должен выдавать админский токен
-        UserAccount user = users.findByPhoneAndDeletedAtIsNull(phone)
-                .filter(u -> u.getRole() == Role.FRIEND)
-                .orElseThrow(UnknownPhoneException::new);
-        return noContentWithCookie(jwt.issue(user.getId(), user.getRole()), COOKIE_TTL);
+        loginService.requestCode(body.phone());
+        return ResponseEntity.accepted().build();
     }
 
     @PostMapping("/admin-login")
