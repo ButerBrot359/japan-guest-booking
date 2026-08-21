@@ -98,8 +98,8 @@ export function CalendarPage() {
   }
 
   // клик по чужому занятому дню с известным именем — «кто гостит»:
-  // сканируем от кликнутого дня влево/вправо, пока имя совпадает; выезд — день
-  // после последнего занятого дня (полуинтервал)
+  // сканируем от кликнутого дня влево/вправо, пока имя совпадает; от этапа 6.6
+  // все дни брони (от заезда до выезда включительно) помечены guestName
   const handlePickBusy = (iso: string) => {
     const name = days.get(iso)?.guestName
     if (!name) return
@@ -107,7 +107,7 @@ export function CalendarPage() {
     while (days.get(addDays(from, -1))?.guestName === name) from = addDays(from, -1)
     let last = iso
     while (days.get(addDays(last, 1))?.guestName === name) last = addDays(last, 1)
-    setGuestInfo({ name, from, to: addDays(last, 1) })
+    setGuestInfo({ name, from, to: last })
   }
 
   const submitBooking = (comment: string) => {

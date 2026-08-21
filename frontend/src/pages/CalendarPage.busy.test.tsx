@@ -32,6 +32,7 @@ test('клик по занятому дню показывает кто гост
   mockState.days = [
     { date: '2026-09-10', status: 'BOOKED', guestName: 'Миша', mine: false },
     { date: '2026-09-11', status: 'BOOKED', guestName: 'Миша', mine: false },
+    { date: '2026-09-12', status: 'BOOKED', guestName: 'Миша', mine: false },
   ]
   renderApp()
   await userEvent.click((await screen.findAllByRole('button', { name: /10 сентября.*занято/i }))[0])
