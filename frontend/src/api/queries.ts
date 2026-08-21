@@ -30,7 +30,12 @@ export function useVerifyLogin() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: { phone: string; code: string }) => api.post<void>('/auth/verify', body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['me'] })
+      // календарь зависит от зрителя (mine/имена гостей) — после входа перезапрашиваем
+      qc.invalidateQueries({ queryKey: ['calendar'] })
+      qc.invalidateQueries({ queryKey: ['my-bookings'] })
+    },
   })
 }
 
@@ -38,7 +43,13 @@ export function useLogout() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => api.post<void>('/auth/logout'),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['me'] })
+      // без этого зелёные дни и имена гостей остаются видны анониму до F5
+      qc.invalidateQueries({ queryKey: ['calendar'] })
+      // брони прошлого пользователя не должны пережить выход
+      qc.removeQueries({ queryKey: ['my-bookings'] })
+    },
   })
 }
 

@@ -129,6 +129,32 @@ test('аноним кликает дату → модалка логина → �
     .toHaveAttribute('data-selected')
 })
 
+test('вход и выход перезапрашивают календарь — свои даты зеленеют и обратно', async () => {
+  // зеркало бэкенда: mine/имена зависят от того, есть ли кука зрителя
+  server.use(http.get('/api/calendar', () =>
+    HttpResponse.json({ days: [{
+      date: '2026-09-10', status: 'BOOKED',
+      guestName: mockState.me ? 'Маша' : null, mine: mockState.me != null,
+    }] })))
+  renderApp()
+
+  const anonDay = (await screen.findAllByRole('button', { name: /10 сентября, занято/i }))[0]
+  expect(anonDay.className).toContain('bg-hanko')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
+  await loginAs('7787886432')
+  await waitFor(() => {
+    expect(screen.getAllByRole('button', { name: /10 сентября/i })[0].className)
+      .toContain('bg-leaf')
+  })
+
+  await userEvent.click(screen.getAllByRole('button', { name: 'выйти' })[0])
+  await waitFor(() => {
+    expect(screen.getAllByRole('button', { name: /10 сентября/i })[0].className)
+      .toContain('bg-hanko')
+  })
+})
+
 test('смена режима сбрасывает устаревшую ошибку create и выбор дат', async () => {
   seedFreeSeptember()
   seedMe({ activeBooking: { id: 7, checkIn: '2026-09-10', checkOut: '2026-09-13', status: 'CONFIRMED' } })
