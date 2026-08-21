@@ -10,7 +10,7 @@ import { Calendar, type Selection } from '../components/Calendar'
 import { Header } from '../components/Header'
 import { LoginModal } from '../components/LoginModal'
 import { ProfileCard } from '../components/ProfileCard'
-import { addDays, addMonths, isoRange, isoToRu, todayIso } from '../lib/dates'
+import { addDays, addMonths, isoToRu, todayIso } from '../lib/dates'
 import { pickDay } from '../lib/selection'
 
 type Flow =
@@ -53,13 +53,6 @@ export function CalendarPage() {
       return next
     })
 
-  const checkoutCandidates = (() => {
-    if (!selection.checkIn || selection.checkOut) return undefined
-    for (const iso of isoRange(selection.checkIn, yearTo)) {
-      if (iso > selection.checkIn && (days.get(iso)?.status ?? 'FREE') !== 'FREE') return new Set([iso])
-    }
-    return undefined
-  })()
   // зеркалит бэкенд-лимит 14 ночей (RANGE_TOO_LONG) — пока выбирается выезд
   const maxCheckout = selection.checkIn && !selection.checkOut ? addDays(selection.checkIn, 14) : undefined
 
@@ -194,7 +187,6 @@ export function CalendarPage() {
             days={days}
             selection={selection}
             selectable
-            checkoutCandidates={checkoutCandidates}
             maxCheckout={maxCheckout}
             onShiftMonth={shiftMonth}
             onPick={handlePick}
@@ -207,7 +199,6 @@ export function CalendarPage() {
             days={days}
             selection={selection}
             selectable
-            checkoutCandidates={checkoutCandidates}
             maxCheckout={maxCheckout}
             onPick={handlePick}
             onPickBusy={handlePickBusy}

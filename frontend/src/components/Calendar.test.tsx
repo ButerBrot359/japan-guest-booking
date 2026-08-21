@@ -52,11 +52,12 @@ test('свободный день кликабелен и зовёт onPick с I
   expect(onPick).toHaveBeenCalledWith('2026-09-15')
 })
 
-test('выбранный диапазон подсвечен', () => {
+test('выбранный диапазон подсвечен включая день выезда', () => {
   render(<Calendar {...base} days={new Map([])}
     selection={{ checkIn: '2026-09-10', checkOut: '2026-09-13' }} />)
   expect(screen.getByRole('button', { name: /10 сентября/i })).toHaveAttribute('data-selected', 'true')
   expect(screen.getByRole('button', { name: /12 сентября/i })).toHaveAttribute('data-selected', 'true')
+  expect(screen.getByRole('button', { name: /13 сентября/i })).toHaveAttribute('data-selected', 'true')
 })
 
 test('прошедший день недоступен для выбора, даже если он FREE', () => {
@@ -67,14 +68,6 @@ test('прошедший день недоступен для выбора, да
   const target = screen.getAllByRole('button', { name: /свободно/ })
     .find((b) => b.textContent === dayNum)
   expect(target).toBeDisabled()
-})
-
-test('день из checkoutCandidates кликабелен несмотря на статус', async () => {
-  const onPick = vi.fn()
-  render(<Calendar {...base} onPick={onPick} checkoutCandidates={new Set(['2026-09-13'])}
-    days={new Map([day('2026-09-13', { status: 'BOOKED', guestName: 'Петя' })])} />)
-  await userEvent.click(screen.getByRole('button', { name: /13 сентября/i }))
-  expect(onPick).toHaveBeenCalledWith('2026-09-13')
 })
 
 test('свой день зелёный и есть в легенде', () => {

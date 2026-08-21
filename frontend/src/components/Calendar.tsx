@@ -14,8 +14,6 @@ interface CalendarProps {
   /** Стрелки навигации рендерятся только если проп передан */
   onShiftMonth?: (delta: 1 | -1) => void
   onPick: (dayIso: string) => void
-  /** Дни, кликабельные как выезд, даже если статус не FREE (полуинтервал) */
-  checkoutCandidates?: Set<string>
   /** Клик по чужому занятому дню с известным именем гостя («кто гостит») */
   onPickBusy?: (dayIso: string) => void
   /** Пока выбирается выезд — дни дальше 14 ночей от заезда заблокированы */
@@ -35,16 +33,16 @@ function ariaLabel(iso: string, day: CalendarDay | undefined): string {
 }
 
 function Month({
-  start, days, selection, selectable, onPick, checkoutCandidates, onPickBusy, maxCheckout, today,
+  start, days, selection, selectable, onPick, onPickBusy, maxCheckout, today,
 }: {
   start: string
   today: string
 } & Pick<CalendarProps,
-  'days' | 'selection' | 'selectable' | 'onPick' | 'checkoutCandidates' | 'onPickBusy' | 'maxCheckout'
+  'days' | 'selection' | 'selectable' | 'onPick' | 'onPickBusy' | 'maxCheckout'
 >) {
   const selected = new Set(
     selection.checkIn && selection.checkOut
-      ? isoRange(selection.checkIn, selection.checkOut)
+      ? [...isoRange(selection.checkIn, selection.checkOut), selection.checkOut]
       : selection.checkIn ? [selection.checkIn] : [],
   )
   return (
@@ -63,7 +61,7 @@ function Month({
           const clickableBusy = status === 'BOOKED' && !day?.mine && day?.guestName != null && onPickBusy != null
           const beyondMax = maxCheckout != null && iso > maxCheckout
           const disabled = !selectable || iso < today || beyondMax ||
-            (status !== 'FREE' && !checkoutCandidates?.has(iso) && !clickableBusy)
+            (status !== 'FREE' && !clickableBusy)
           return (
             <button
               key={iso}
