@@ -12,7 +12,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 test('useAdminGuests отдаёт список из API', async () => {
   mockState.adminGuests = [
-    { id: 1, phone: '+79990000001', name: 'Айгуль', role: 'FRIEND', telegramLinked: true, deletedAt: null },
+    { id: 1, phone: '+79990000001', name: 'Айгуль', role: 'FRIEND', telegramLinked: true, deletedAt: null, greetings: [] },
   ]
   const { result } = renderHook(() => useAdminGuests(), { wrapper })
   await waitFor(() => expect(result.current.data?.[0].name).toBe('Айгуль'))

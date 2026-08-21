@@ -18,6 +18,7 @@ export type AccessRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 export interface AdminUserRow {
   id: number; phone: string; name: string
   role: 'FRIEND' | 'ADMIN'; telegramLinked: boolean; deletedAt: string | null
+  greetings: string[]
 }
 export interface AccessRequestRow {
   id: number; phone: string; name: string; message: string | null

@@ -12,10 +12,23 @@ function renderSection() {
 
 test('показывает список гостей', async () => {
   mockState.adminGuests = [
-    { id: 1, phone: '+79990000001', name: 'Айгуль', role: 'FRIEND', telegramLinked: true, deletedAt: null },
+    { id: 1, phone: '+79990000001', name: 'Айгуль', role: 'FRIEND', telegramLinked: true, deletedAt: null, greetings: [] },
   ]
   renderSection()
   expect(await screen.findByText('Айгуль')).toBeInTheDocument()
+})
+
+test('колонка приветствий показывает текст и полную подсказку в title', async () => {
+  mockState.adminGuests = [
+    { id: 1, phone: '+79990000001', name: 'Айгуль', role: 'FRIEND', telegramLinked: true,
+      deletedAt: null, greetings: ['С приездом, дорогой друг!', 'Чайник уже греется'] },
+  ]
+  renderSection()
+  const cell = await screen.findByTestId('greetings-cell-1')
+  // видимый текст — приветствия через разделитель
+  expect(cell).toHaveTextContent('С приездом, дорогой друг!')
+  // при наведении — полный текст в title
+  expect(cell).toHaveAttribute('title', 'С приездом, дорогой друг! · Чайник уже греется')
 })
 
 test('добавление гостя обновляет список', async () => {
@@ -28,7 +41,7 @@ test('добавление гостя обновляет список', async ()
 
 test('добавление существующего показывает ошибку', async () => {
   mockState.adminGuests = [
-    { id: 1, phone: '+77001234567', name: 'Есть', role: 'FRIEND', telegramLinked: false, deletedAt: null },
+    { id: 1, phone: '+77001234567', name: 'Есть', role: 'FRIEND', telegramLinked: false, deletedAt: null, greetings: [] },
   ]
   renderSection()
   await userEvent.type(screen.getByTestId('add-phone'), '7001234567')
@@ -39,7 +52,7 @@ test('добавление существующего показывает ош�
 
 test('удаление гостя после подтверждения', async () => {
   mockState.adminGuests = [
-    { id: 1, phone: '+79990000001', name: 'Удаляемый', role: 'FRIEND', telegramLinked: false, deletedAt: null },
+    { id: 1, phone: '+79990000001', name: 'Удаляемый', role: 'FRIEND', telegramLinked: false, deletedAt: null, greetings: [] },
   ]
   renderSection()
   await userEvent.click(await screen.findByRole('button', { name: 'Удалить' }))
@@ -49,8 +62,8 @@ test('удаление гостя после подтверждения', async 
 
 test('у админа и удалённого гостя нет кнопок действий', async () => {
   mockState.adminGuests = [
-    { id: 1, phone: '+79990000001', name: 'Начальник', role: 'ADMIN', telegramLinked: true, deletedAt: null },
-    { id: 2, phone: '+79990000002', name: 'Бывший', role: 'FRIEND', telegramLinked: false, deletedAt: '2026-08-01T00:00:00Z' },
+    { id: 1, phone: '+79990000001', name: 'Начальник', role: 'ADMIN', telegramLinked: true, deletedAt: null, greetings: [] },
+    { id: 2, phone: '+79990000002', name: 'Бывший', role: 'FRIEND', telegramLinked: false, deletedAt: '2026-08-01T00:00:00Z', greetings: [] },
   ]
   renderSection()
   await screen.findByText('Начальник')
@@ -61,7 +74,7 @@ test('у админа и удалённого гостя нет кнопок д�
 
 test('редактор приветствий грузит текущие и сохраняет', async () => {
   mockState.adminGuests = [
-    { id: 1, phone: '+79990000001', name: 'Гость', role: 'FRIEND', telegramLinked: false, deletedAt: null },
+    { id: 1, phone: '+79990000001', name: 'Гость', role: 'FRIEND', telegramLinked: false, deletedAt: null, greetings: [] },
   ]
   mockState.guestGreetings = { 1: ['Привет!'] }
   renderSection()

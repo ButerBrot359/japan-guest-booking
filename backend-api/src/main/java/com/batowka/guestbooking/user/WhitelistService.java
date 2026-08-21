@@ -25,14 +25,20 @@ public class WhitelistService {
     private final Clock clock;
 
     public record UserRow(long id, String phone, String name, Role role,
-                          boolean telegramLinked, Instant deletedAt) {
+                          boolean telegramLinked, Instant deletedAt, List<String> greetings) {
     }
 
     @Transactional(readOnly = true)
     public List<UserRow> list() {
+        // приветствия одним запросом, сгруппированы по гостю (без N+1); порядок — по id
+        java.util.Map<Long, List<String>> byUser = greetingRepo.findAll(Sort.by("id")).stream()
+                .collect(java.util.stream.Collectors.groupingBy(UserGreeting::getUserId,
+                        java.util.stream.Collectors.mapping(UserGreeting::getText,
+                                java.util.stream.Collectors.toList())));
         return users.findAll(Sort.by("id")).stream()
                 .map(u -> new UserRow(u.getId(), u.getPhone(), u.getName(), u.getRole(),
-                        u.getTelegramChatId() != null, u.getDeletedAt()))
+                        u.getTelegramChatId() != null, u.getDeletedAt(),
+                        byUser.getOrDefault(u.getId(), List.of())))
                 .toList();
     }
 

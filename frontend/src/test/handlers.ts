@@ -123,7 +123,7 @@ export const handlers = [
       return HttpResponse.json({ code: 'ALREADY_MEMBER', message: '' }, { status: 409 })
     }
     const id = mockState.adminGuests.length + 1
-    mockState.adminGuests.push({ id, phone, name, role: 'FRIEND', telegramLinked: false, deletedAt: null })
+    mockState.adminGuests.push({ id, phone, name, role: 'FRIEND', telegramLinked: false, deletedAt: null, greetings: [] })
     return new HttpResponse(null, { status: 201 })
   }),
   http.delete('/api/admin/users/:id', ({ params }) => {

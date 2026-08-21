@@ -56,7 +56,7 @@ export function AdminGuests() {
 
       <table className="w-full text-left text-sm">
         <thead className="text-xs text-muted">
-          <tr><th className="py-1">Имя</th><th>Телефон</th><th>Роль</th><th>Telegram</th><th>Статус</th><th></th></tr>
+          <tr><th className="py-1">Имя</th><th>Телефон</th><th>Роль</th><th>Telegram</th><th>Статус</th><th>Приветствия</th><th></th></tr>
         </thead>
         <tbody>
           {(guests.data ?? []).map((g) => (
@@ -66,6 +66,12 @@ export function AdminGuests() {
               <td>{g.role === 'ADMIN' ? 'админ' : 'гость'}</td>
               <td>{g.telegramLinked ? 'да' : '—'}</td>
               <td>{g.deletedAt ? 'удалён' : 'активен'}</td>
+              {/* приветствия: обрезаем длинное, полный текст — в title при наведении */}
+              <td data-testid={`greetings-cell-${g.id}`}
+                title={g.greetings.join(' · ')}
+                className="max-w-[16rem] truncate text-muted">
+                {g.greetings.join(' · ') || '—'}
+              </td>
               <td className="py-2 text-right text-xs">
                 {g.deletedAt == null && g.role !== 'ADMIN' && (
                   <span className="flex justify-end gap-2">

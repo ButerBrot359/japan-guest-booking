@@ -50,6 +50,22 @@ class AdminUserTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void listIncludesGreetings() throws Exception {
+        Long id = jdbc.queryForObject(
+                "insert into users(phone, name) values ('+81311100009', 'С приветом') returning id",
+                Long.class);
+        jdbc.update("insert into user_greetings(user_id, text) values (?, 'Привет!'), (?, 'С приездом!')", id, id);
+
+        mvc.perform(get("/api/admin/users").cookie(adminAuth()))
+                .andExpect(status().isOk())
+                // гость с приветствиями — последний по id
+                .andExpect(jsonPath("$[?(@.name == 'С приветом')].greetings[0]").value("Привет!"))
+                .andExpect(jsonPath("$[?(@.name == 'С приветом')].greetings[1]").value("С приездом!"))
+                // у сид-админа приветствий нет — пустой массив, не null
+                .andExpect(jsonPath("$[0].greetings").isArray());
+    }
+
+    @Test
     void deleteRevokesTelegramLink() throws Exception {
         Long id = jdbc.queryForObject(
                 "insert into users(phone, name, telegram_chat_id) values ('+81311100005', 'Со связкой', 779599) returning id",
