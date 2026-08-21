@@ -86,6 +86,18 @@ export function CalendarPage() {
     }
   }, [me.data, pendingDate])
 
+  // iOS: коммент-инпут в шторке открывал клавиатуру и уводил скролл вниз —
+  // fixed-модалка «Мы очень вас ждём» из-за этого рендерилась далеко внизу и
+  // кнопка «Хорошо» была недостижима. Гасим фокус (клавиатуру) и возвращаем скролл.
+  useEffect(() => {
+    if (flow.kind !== 'celebrate') return
+    const active = document.activeElement
+    if (active instanceof HTMLElement) active.blur()
+    // scrollTop, а не window.scrollTo: и Safari (body), и остальные (documentElement)
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
+  }, [flow.kind])
+
   const handlePick = (iso: string) => {
     // /api/me ещё грузится — не мигаем модалкой уже залогиненному, просто игнорируем клик
     if (me.isLoading) return
