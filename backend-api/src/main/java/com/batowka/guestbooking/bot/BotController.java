@@ -1,6 +1,5 @@
 package com.batowka.guestbooking.bot;
 
-import com.batowka.guestbooking.booking.Booking;
 import com.batowka.guestbooking.booking.BookingStatus;
 import com.batowka.guestbooking.booking.GuestBookingsService;
 import com.batowka.guestbooking.user.UserAccountRepository;

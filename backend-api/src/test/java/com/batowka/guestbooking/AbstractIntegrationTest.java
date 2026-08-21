@@ -31,6 +31,13 @@ public abstract class AbstractIntegrationTest {
         KAFKA.start();
     }
 
+    // По умолчанию app.bot.api-token пуст (эндпоинт /api/bot/** закрыт) — здесь задаём
+    // тестовый токен, чтобы BotBookingsTest мог его использовать.
+    @org.springframework.test.context.DynamicPropertySource
+    static void botToken(org.springframework.test.context.DynamicPropertyRegistry registry) {
+        registry.add("app.bot.api-token", () -> "test-bot-token");
+    }
+
     /** Адрес брокера тест-контейнера — для тестовых консьюмеров. */
     protected static String kafkaBootstrapServers() {
         return KAFKA.getBootstrapServers();

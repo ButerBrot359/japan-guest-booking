@@ -24,9 +24,9 @@ type Visit struct {
 }
 
 type GuestBookings struct {
-	Linked  bool      `json:"linked"`
-	Active  *Booking  `json:"active"`
-	History []Visit   `json:"history"`
+	Linked  bool     `json:"linked"`
+	Active  *Booking `json:"active"`
+	History []Visit  `json:"history"`
 }
 
 type Client struct {

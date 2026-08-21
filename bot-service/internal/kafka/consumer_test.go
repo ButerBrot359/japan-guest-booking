@@ -17,16 +17,22 @@ type fakeSender struct {
 	nextID    int64
 	deleted   []int64 // message_id удалённых сообщений
 	deleteErr error   // если задана — DeleteMessage падает этой ошибкой
+	menuSent  bool    // true, если последняя отправка прошла через SendMenu
 }
 
 func (f *fakeSender) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (int64, error) {
 	f.sent = append(f.sent, text)
 	f.nextID++
+	f.menuSent = false
 	return f.nextID, nil
 }
 
 func (f *fakeSender) SendMenu(ctx context.Context, chatID int64, text string) (int64, error) {
-	return f.SendMessage(ctx, chatID, text, false)
+	id, err := f.SendMessage(ctx, chatID, text, false)
+	if err == nil {
+		f.menuSent = true
+	}
+	return id, err
 }
 
 func (f *fakeSender) DeleteMessage(ctx context.Context, chatID, messageID int64) error {
@@ -72,6 +78,9 @@ func TestWelcomeIsRendered(t *testing.T) {
 
 	if len(sender.sent) != 1 || !strings.Contains(sender.sent[0], "Маша") {
 		t.Fatalf("ожидал приветствие с именем: %v", sender.sent)
+	}
+	if !sender.menuSent {
+		t.Fatal("WELCOME должен отправляться через SendMenu (с клавиатурой), а не обычным SendMessage")
 	}
 }
 

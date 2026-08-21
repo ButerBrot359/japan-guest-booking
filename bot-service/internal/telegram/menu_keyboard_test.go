@@ -36,4 +36,8 @@ func TestSendMenuAttachesPersistentKeyboard(t *testing.T) {
 	if b0["text"] != MenuBookings {
 		t.Fatalf("первая кнопка — %q, ожидал %q", b0["text"], MenuBookings)
 	}
+	b1, _ := first[1].(map[string]any)
+	if b1["text"] != MenuHistory {
+		t.Fatalf("вторая кнопка — %q, ожидал %q", b1["text"], MenuHistory)
+	}
 }

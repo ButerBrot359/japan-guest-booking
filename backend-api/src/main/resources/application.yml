@@ -28,4 +28,4 @@ app:
     password: admin-dev-password
   bot:
     # dev/тест-заглушка; боевой BOT_API_TOKEN придёт из .env
-    api-token: ${BOT_API_TOKEN:test-bot-token}
+    api-token: ${BOT_API_TOKEN:}
