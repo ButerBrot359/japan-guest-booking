@@ -94,6 +94,74 @@ func TestApiErrorIsReturned(t *testing.T) {
 	}
 }
 
+func TestSendApprovalButtons(t *testing.T) {
+	var body map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&body)
+		w.Write([]byte(`{"ok":true,"result":{"message_id":15}}`))
+	}))
+	defer server.Close()
+
+	id, err := NewClient("TEST", server.URL).SendApprovalButtons(
+		context.Background(), 555, "Новая заявка", 42)
+	if err != nil || id != 15 {
+		t.Fatalf("SendApprovalButtons вернул (%d, %v)", id, err)
+	}
+	markup, _ := body["reply_markup"].(map[string]any)
+	rows, _ := markup["inline_keyboard"].([]any)
+	first, _ := rows[0].([]any)
+	if len(first) != 2 {
+		t.Fatalf("ожидал ряд из двух inline-кнопок: %v", rows)
+	}
+	b0, _ := first[0].(map[string]any)
+	b1, _ := first[1].(map[string]any)
+	if b0["callback_data"] != "approve:42" || b1["callback_data"] != "reject:42" {
+		t.Fatalf("callback_data кнопок неверные: %v / %v", b0["callback_data"], b1["callback_data"])
+	}
+}
+
+func TestAnswerCallback(t *testing.T) {
+	var body map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/botTEST/answerCallbackQuery" {
+			t.Errorf("неожиданный путь: %s", r.URL.Path)
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		w.Write([]byte(`{"ok":true,"result":true}`))
+	}))
+	defer server.Close()
+
+	if err := NewClient("TEST", server.URL).AnswerCallback(context.Background(), "cb1", "Готово"); err != nil {
+		t.Fatalf("AnswerCallback: %v", err)
+	}
+	if body["callback_query_id"] != "cb1" || body["text"] != "Готово" {
+		t.Errorf("тело неверное: %v", body)
+	}
+}
+
+func TestEditMessageText(t *testing.T) {
+	var body map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/botTEST/editMessageText" {
+			t.Errorf("неожиданный путь: %s", r.URL.Path)
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		w.Write([]byte(`{"ok":true,"result":{}}`))
+	}))
+	defer server.Close()
+
+	if err := NewClient("TEST", server.URL).EditMessageText(context.Background(), 555, 15, "✅ Добавлен"); err != nil {
+		t.Fatalf("EditMessageText: %v", err)
+	}
+	if body["chat_id"].(float64) != 555 || body["message_id"].(float64) != 15 || body["text"] != "✅ Добавлен" {
+		t.Errorf("тело неверное: %v", body)
+	}
+	// кнопки убираются — reply_markup не отправляем
+	if _, has := body["reply_markup"]; has {
+		t.Errorf("editMessageText не должен слать reply_markup: %v", body)
+	}
+}
+
 func TestNetworkErrorDoesNotLeakToken(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	server.Close() // сервер закрыт — запрос гарантированно упадёт по сети,

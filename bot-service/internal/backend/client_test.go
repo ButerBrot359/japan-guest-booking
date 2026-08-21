@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -56,5 +57,40 @@ func TestGetGuestBookingsHttpErrorIsReturned(t *testing.T) {
 
 	if _, err := NewClient(srv.URL, "tok").GetGuestBookings(context.Background(), 1); err == nil {
 		t.Fatal("ожидал ошибку при 500")
+	}
+}
+
+func TestResolveAccessRequestReturnsStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/bot/access-requests/42/approve" {
+			t.Errorf("неожиданный путь: %s", r.URL.Path)
+		}
+		if r.Header.Get("X-Bot-Token") != "tok" {
+			t.Errorf("нет служебного токена")
+		}
+		var body map[string]any
+		json.NewDecoder(r.Body).Decode(&body)
+		if body["adminChatId"].(float64) != 900 {
+			t.Errorf("adminChatId не передан: %v", body)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	code, err := NewClient(srv.URL, "tok").ResolveAccessRequest(context.Background(), 42, "approve", 900)
+	if err != nil || code != http.StatusNoContent {
+		t.Fatalf("ResolveAccessRequest вернул (%d, %v)", code, err)
+	}
+}
+
+func TestResolveAccessRequestReturnsConflict(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+	}))
+	defer srv.Close()
+
+	code, err := NewClient(srv.URL, "tok").ResolveAccessRequest(context.Background(), 1, "reject", 900)
+	if err != nil || code != http.StatusConflict {
+		t.Fatalf("ожидал 409 без ошибки, получил (%d, %v)", code, err)
 	}
 }

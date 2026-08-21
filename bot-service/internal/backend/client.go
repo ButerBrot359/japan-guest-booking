@@ -2,6 +2,7 @@
 package backend
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -61,4 +62,26 @@ func (c *Client) GetGuestBookings(ctx context.Context, chatID int64) (GuestBooki
 		return GuestBookings{}, err
 	}
 	return gb, nil
+}
+
+// ResolveAccessRequest одобряет/отклоняет заявку; возвращает HTTP-статус бэкенда
+// (204/403/404/409) для маршрутизации ответа боту, либо ошибку сети.
+func (c *Client) ResolveAccessRequest(ctx context.Context, id int64, action string, adminChatID int64) (int, error) {
+	payload, err := json.Marshal(map[string]any{"adminChatId": adminChatID})
+	if err != nil {
+		return 0, err
+	}
+	url := c.base + "/api/bot/access-requests/" + strconv.FormatInt(id, 10) + "/" + action
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("X-Bot-Token", c.token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode, nil
 }

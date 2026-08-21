@@ -53,10 +53,11 @@ type BookingEvent struct {
 }
 
 type AccessRequestReceived struct {
-	ChatID  int64  `json:"chat_id"`
-	Name    string `json:"name"`
-	Phone   string `json:"phone"`
-	Message string `json:"message,omitempty"`
+	ChatID    int64  `json:"chat_id"`
+	Name      string `json:"name"`
+	Phone     string `json:"phone"`
+	Message   string `json:"message,omitempty"`
+	RequestID int64  `json:"request_id"`
 }
 
 // NewUUID генерирует UUID v4 без внешних зависимостей.

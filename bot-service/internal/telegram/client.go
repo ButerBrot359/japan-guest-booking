@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -137,6 +138,47 @@ func (c *Client) SendMenu(ctx context.Context, chatID int64, text string) (int64
 func (c *Client) DeleteMessage(ctx context.Context, chatID, messageID int64) error {
 	return c.post(ctx, "/deleteMessage",
 		map[string]any{"chat_id": chatID, "message_id": messageID}, nil)
+}
+
+// Тексты и callback_data кнопок одобрения заявки — общие для сборки и разбора.
+const (
+	btnApprove = "✅ Добавить"
+	btnReject  = "❌ Отклонить"
+	ActApprove = "approve"
+	ActReject  = "reject"
+)
+
+// SendApprovalButtons — уведомление о заявке с inline-кнопками approve/reject.
+func (c *Client) SendApprovalButtons(ctx context.Context, chatID int64, text string, requestID int64) (int64, error) {
+	id := strconv.FormatInt(requestID, 10)
+	body := map[string]any{
+		"chat_id": chatID,
+		"text":    text,
+		"reply_markup": map[string]any{
+			"inline_keyboard": [][]map[string]any{{
+				{"text": btnApprove, "callback_data": ActApprove + ":" + id},
+				{"text": btnReject, "callback_data": ActReject + ":" + id},
+			}},
+		},
+	}
+	var sent struct {
+		MessageID int64 `json:"message_id"`
+	}
+	if err := c.post(ctx, "/sendMessage", body, &sent); err != nil {
+		return 0, err
+	}
+	return sent.MessageID, nil
+}
+
+func (c *Client) AnswerCallback(ctx context.Context, callbackID, text string) error {
+	return c.post(ctx, "/answerCallbackQuery",
+		map[string]any{"callback_query_id": callbackID, "text": text}, nil)
+}
+
+// EditMessageText правит текст сообщения; reply_markup не шлём — inline-кнопки убираются.
+func (c *Client) EditMessageText(ctx context.Context, chatID, messageID int64, text string) error {
+	return c.post(ctx, "/editMessageText",
+		map[string]any{"chat_id": chatID, "message_id": messageID, "text": text}, nil)
 }
 
 func (c *Client) post(ctx context.Context, method string, body map[string]any, result any) error {
