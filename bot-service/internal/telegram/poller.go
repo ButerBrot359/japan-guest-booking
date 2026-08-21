@@ -79,14 +79,7 @@ func (p *Poller) handle(ctx context.Context, u Update) error {
 	}
 	switch {
 	case m.Text == "/start":
-		msgID, err := p.api.SendMessage(ctx, m.Chat.ID,
-			"Привет! Чтобы получать коды подтверждения и уведомления о бронях, "+
-				"поделись, пожалуйста, своим контактом.", true)
-		if err != nil {
-			log.Printf("sendMessage /start: %v", err)
-			return nil
-		}
-		p.startInvite[m.Chat.ID] = msgID
+		p.handleStart(ctx, m.Chat.ID)
 	case m.Text == MenuBookings:
 		p.sendMenuReply(ctx, m.Chat.ID, formatActive)
 	case m.Text == MenuHistory:
@@ -111,6 +104,31 @@ func (p *Poller) handle(ctx context.Context, u Update) error {
 		}
 	}
 	return nil
+}
+
+// handleStart делает /start универсальным входом: у привязанного гостя показывает
+// меню-клавиатуру (иначе уже привязанный её никогда не увидит — она приходит только
+// на WELCOME при первой привязке), непривязанному — приглашение поделиться контактом.
+// При недоступном бэкенде — безопасный фоллбэк на приглашение (непривязанный сможет войти).
+func (p *Poller) handleStart(ctx context.Context, chatID int64) {
+	gb, err := p.bookings.GetGuestBookings(ctx, chatID)
+	if err == nil && gb.Linked {
+		if _, err := p.api.SendMenu(ctx, chatID, "С возвращением! 🏡 Вот твоё меню."); err != nil {
+			log.Printf("sendMenu /start: %v", err)
+		}
+		return
+	}
+	if err != nil {
+		log.Printf("bot /start: backend: %v — показываю приглашение контакта", err)
+	}
+	msgID, err := p.api.SendMessage(ctx, chatID,
+		"Привет! Чтобы получать коды подтверждения и уведомления о бронях, "+
+			"поделись, пожалуйста, своим контактом.", true)
+	if err != nil {
+		log.Printf("sendMessage /start: %v", err)
+		return
+	}
+	p.startInvite[chatID] = msgID
 }
 
 // sendMenuReply тянет данные гостя и шлёт отформатированный ответ; ошибки бэкенда

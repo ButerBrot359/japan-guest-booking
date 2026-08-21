@@ -15,6 +15,7 @@ type fakeAPI struct {
 	sentChatIDs    []int64
 	contactButtons []bool
 	deleted        []int64
+	menuTexts      []string // тексты, отправленные с меню-клавиатурой (SendMenu)
 }
 
 func (f *fakeAPI) GetUpdates(ctx context.Context, offset int64) ([]Update, error) {
@@ -26,6 +27,11 @@ func (f *fakeAPI) SendMessage(ctx context.Context, chatID int64, text string, re
 	f.sentChatIDs = append(f.sentChatIDs, chatID)
 	f.contactButtons = append(f.contactButtons, requestContact)
 	return int64(len(f.sent)), nil
+}
+
+func (f *fakeAPI) SendMenu(ctx context.Context, chatID int64, text string) (int64, error) {
+	f.menuTexts = append(f.menuTexts, text)
+	return int64(len(f.menuTexts)), nil
 }
 
 func (f *fakeAPI) DeleteMessage(ctx context.Context, chatID, messageID int64) error {
@@ -59,15 +65,50 @@ func (f *fakeFetcher) GetGuestBookings(ctx context.Context, chatID int64) (backe
 	return f.gb, f.err
 }
 
-func TestStartCommandSendsGreetingWithContactButton(t *testing.T) {
+func TestStartUnlinkedAsksForContact(t *testing.T) {
 	api := &fakeAPI{}
+	// fetcher по умолчанию отдаёт Linked:false — гость не привязан
 	p := NewPoller(api, &fakePublisher{}, &fakeFetcher{})
 
 	p.handle(context.Background(), Update{Message: &Message{
 		Chat: Chat{ID: 555}, From: &User{ID: 777}, Text: "/start"}})
 
 	if len(api.sent) != 1 || !api.contactButtons[0] || api.sentChatIDs[0] != 555 {
-		t.Fatalf("ожидал приветствие с кнопкой контакта в чат 555: %+v", api)
+		t.Fatalf("непривязанному ожидал приглашение с кнопкой контакта: %+v", api)
+	}
+	if len(api.menuTexts) != 0 {
+		t.Fatalf("непривязанному меню слать не должны: %v", api.menuTexts)
+	}
+}
+
+func TestStartLinkedShowsMenu(t *testing.T) {
+	api := &fakeAPI{}
+	// уже привязанный гость: /start должен вернуть меню-клавиатуру, а не просить контакт
+	fetch := &fakeFetcher{gb: backend.GuestBookings{Linked: true}}
+	p := NewPoller(api, &fakePublisher{}, fetch)
+
+	p.handle(context.Background(), Update{Message: &Message{
+		Chat: Chat{ID: 555}, From: &User{ID: 777}, Text: "/start"}})
+
+	if len(api.menuTexts) != 1 {
+		t.Fatalf("привязанному ожидал одно сообщение с меню-клавиатурой: %+v", api)
+	}
+	if len(api.sent) != 0 {
+		t.Fatalf("привязанному приглашение контакта слать не должны: %v", api.sent)
+	}
+}
+
+func TestStartBackendErrorFallsBackToContact(t *testing.T) {
+	api := &fakeAPI{}
+	// бэкенд недоступен — безопасный фоллбэк на приглашение контакта (непривязанный сможет войти)
+	fetch := &fakeFetcher{err: errors.New("бэкенд лёг")}
+	p := NewPoller(api, &fakePublisher{}, fetch)
+
+	p.handle(context.Background(), Update{Message: &Message{
+		Chat: Chat{ID: 555}, From: &User{ID: 777}, Text: "/start"}})
+
+	if len(api.sent) != 1 || !api.contactButtons[0] {
+		t.Fatalf("при ошибке бэкенда ожидал фоллбэк на контакт: %+v", api)
 	}
 }
 
@@ -169,6 +210,10 @@ func (a *sequencedAPI) GetUpdates(ctx context.Context, offset int64) ([]Update, 
 }
 
 func (a *sequencedAPI) SendMessage(ctx context.Context, chatID int64, text string, requestContact bool) (int64, error) {
+	return 1, nil
+}
+
+func (a *sequencedAPI) SendMenu(ctx context.Context, chatID int64, text string) (int64, error) {
 	return 1, nil
 }
 
