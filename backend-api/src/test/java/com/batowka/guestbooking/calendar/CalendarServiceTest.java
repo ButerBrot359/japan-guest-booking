@@ -73,17 +73,17 @@ class CalendarServiceTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void pendingOtpBookingOccupiesDatesButHidesName() {
-        givenBooking("+81300000002", "Петя", "2026-11-10", "2026-11-12", "PENDING_OTP");
+    void confirmedBookingOccupiesDatesAndShowsNameToViewer() {
+        // PENDING_OTP как отдельный статус брони упразднён (этап 6.6) — единственный
+        // занимающий даты статус теперь CONFIRMED, и он всегда показывает имя зрителю
+        givenBooking("+81300000002", "Петя", "2026-11-10", "2026-11-12", "CONFIRMED");
         Long viewer = givenViewer("+81300000098");
 
-        // даже залогиненному зрителю имя не показываем — бронь не подтверждена
         Map<LocalDate, CalendarDay> map = byDate(calendar.getCalendar(
                 LocalDate.parse("2026-11-01"), LocalDate.parse("2026-11-30"), viewer));
 
         assertThat(map.get(LocalDate.parse("2026-11-10")).status()).isEqualTo(DayStatus.BOOKED);
-        // имя показываем только для подтверждённых броней
-        assertThat(map.get(LocalDate.parse("2026-11-10")).guestName()).isNull();
+        assertThat(map.get(LocalDate.parse("2026-11-10")).guestName()).isEqualTo("Петя");
     }
 
     @Test

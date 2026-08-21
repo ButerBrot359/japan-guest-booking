@@ -19,8 +19,7 @@ import java.util.Map;
 public class CalendarService {
 
     private static final int MAX_RANGE_DAYS = 366;
-    private static final List<BookingStatus> OCCUPYING_STATUSES =
-            List.of(BookingStatus.PENDING_OTP, BookingStatus.CONFIRMED);
+    private static final List<BookingStatus> OCCUPYING_STATUSES = List.of(BookingStatus.CONFIRMED);
 
     private final BookingRepository bookings;
     private final BlockedPeriodRepository blockedPeriods;

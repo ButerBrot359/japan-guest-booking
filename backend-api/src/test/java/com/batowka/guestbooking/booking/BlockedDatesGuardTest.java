@@ -46,7 +46,7 @@ class BlockedDatesGuardTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void rescheduleOntoBlockedDatesGives409OnConfirm() throws Exception {
+    void rescheduleOntoBlockedDatesGives409() throws Exception {
         Long id = guest("+81350000002", 778102L);
         Long bookingId = jdbc.queryForObject("""
                 insert into bookings(user_id, check_in, check_out, status)
@@ -54,23 +54,10 @@ class BlockedDatesGuardTest extends AbstractIntegrationTest {
                 """, Long.class, id);
         jdbc.update("insert into blocked_periods(start_date, end_date) values ('2027-11-02', '2027-11-03')");
 
-        // запросить перенос можно (проверка — при подтверждении кодом)
+        // перенос применяется сразу — блокировка ловится в той же транзакции
         mvc.perform(patch("/api/bookings/" + bookingId).cookie(auth(id)).contentType(APPLICATION_JSON)
                         .content("{\"checkIn\": \"2027-11-01\", \"checkOut\": \"2027-11-05\"}"))
-                .andExpect(status().isNoContent());
-
-        String code = latestOtpCode();
-        mvc.perform(post("/api/bookings/" + bookingId + "/confirm").cookie(auth(id))
-                        .contentType(APPLICATION_JSON).content("{\"code\": \"" + code + "\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DATES_TAKEN"));
-    }
-
-    /** Код из последнего OTP_CODE-события в outbox (код живёт только там). */
-    private String latestOtpCode() {
-        return jdbc.queryForObject("""
-                select payload->'payload'->>'code' from outbox
-                where event_type = 'OTP_CODE' order by id desc limit 1
-                """, String.class);
     }
 }

@@ -11,7 +11,6 @@ import com.batowka.guestbooking.booking.BookingNotFoundException;
 import com.batowka.guestbooking.booking.DatesTakenException;
 import com.batowka.guestbooking.booking.InvalidBookingDatesException;
 import com.batowka.guestbooking.booking.NotYourBookingException;
-import com.batowka.guestbooking.booking.OverlapsOwnBookingException;
 import com.batowka.guestbooking.booking.RangeTooLongException;
 import com.batowka.guestbooking.booking.TelegramNotLinkedException;
 import com.batowka.guestbooking.calendar.BlockedPeriodNotFoundException;
@@ -20,7 +19,6 @@ import com.batowka.guestbooking.calendar.OverlapsBookingException;
 import com.batowka.guestbooking.otp.CodeExpiredException;
 import com.batowka.guestbooking.otp.InvalidCodeException;
 import com.batowka.guestbooking.otp.NoActiveCodeException;
-import com.batowka.guestbooking.otp.ResendTooSoonException;
 import com.batowka.guestbooking.user.ActiveBookingExistsException;
 import com.batowka.guestbooking.user.AlreadyMemberException;
 import com.batowka.guestbooking.user.CannotDeleteAdminException;
@@ -124,22 +122,10 @@ public class GlobalExceptionHandler {
         return new ApiError("NO_ACTIVE_CODE", ex.getMessage());
     }
 
-    @ExceptionHandler(ResendTooSoonException.class)
-    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
-    public ApiError resendTooSoon(ResendTooSoonException ex) {
-        return new ApiError("RESEND_TOO_SOON", ex.getMessage());
-    }
-
     @ExceptionHandler(DatesTakenException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ApiError datesTaken(DatesTakenException ex) {
         return new ApiError("DATES_TAKEN", ex.getMessage());
-    }
-
-    @ExceptionHandler(OverlapsOwnBookingException.class)
-    @ResponseStatus(HttpStatus.CONFLICT)
-    public ApiError overlapsOwnBooking(OverlapsOwnBookingException ex) {
-        return new ApiError("OVERLAPS_OWN_BOOKING", ex.getMessage());
     }
 
     @ExceptionHandler(TelegramNotLinkedException.class)

@@ -48,10 +48,12 @@ class ResolveAccessRequestTest extends AbstractIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "select role from users where phone = '+81314400001'", String.class)).isEqualTo("FRIEND");
 
-        // новый друг может логиниться
+        // новый друг привязывает Telegram (обычный следующий шаг после approve) и логинится —
+        // вход теперь двухшаговый: /login лишь выпускает челлендж (202), не куку
+        jdbc.update("update users set telegram_chat_id = 990001 where phone = '+81314400001'");
         mvc.perform(post("/api/auth/login").contentType(APPLICATION_JSON)
                         .content("{\"phone\": \"+81314400001\"}"))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isAccepted());
     }
 
     @Test

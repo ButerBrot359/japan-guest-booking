@@ -65,22 +65,6 @@ public class OtpService {
                 "expires_at", Instant.now().plus(TTL).toString()));
     }
 
-    /** Вытесняет активный челлендж конкретной брони (отмена pending-брони и т.п.). */
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void expireActive(Long userId, long bookingId) {
-        jdbc.update("""
-                update otp_challenges set status = 'EXPIRED'
-                where user_id = ? and status = 'PENDING'
-                  and (payload->>'booking_id')::bigint = ?
-                """, userId, bookingId);
-    }
-
-    /** Проверяет код активного челленджа гостя для конкретной брони. */
-    @Transactional(propagation = Propagation.MANDATORY)
-    public ChallengeResult verify(Long userId, long bookingId, String code) {
-        return verifyRow(findActive(userId, bookingId), code);
-    }
-
     /** Проверяет код активного челленджа гостя по типу действия (вход — action LOGIN). */
     @Transactional(propagation = Propagation.MANDATORY)
     public ChallengeResult verifyByAction(Long userId, String action, String code) {
@@ -113,19 +97,6 @@ public class OtpService {
                 objectMapper.readTree((String) row.get("payload")));
     }
 
-    /** Перевыпуск кода той же операции; не чаще раза в минуту. */
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void resend(UserAccount user, long bookingId) {
-        Map<String, Object> row = findActive(user.getId(), bookingId);
-        Instant createdAt = ((java.sql.Timestamp) row.get("created_at")).toInstant();
-        if (createdAt.isAfter(Instant.now().minus(Duration.ofMinutes(1)))) {
-            throw new ResendTooSoonException();
-        }
-        JsonNode payload = objectMapper.readTree((String) row.get("payload"));
-        issue(user, (String) row.get("action"),
-                objectMapper.convertValue(payload, Map.class));
-    }
-
     private Map<String, Object> findActiveByAction(Long userId, String action) {
         try {
             return jdbc.queryForMap("""
@@ -134,20 +105,6 @@ public class OtpService {
                     from otp_challenges
                     where user_id = ? and status = 'PENDING' and action = ?
                     """, userId, action);
-        } catch (EmptyResultDataAccessException e) {
-            throw new NoActiveCodeException();
-        }
-    }
-
-    private Map<String, Object> findActive(Long userId, long bookingId) {
-        try {
-            return jdbc.queryForMap("""
-                    select id, action, payload::text as payload, code_hash,
-                           expires_at, created_at
-                    from otp_challenges
-                    where user_id = ? and status = 'PENDING'
-                      and (payload->>'booking_id')::bigint = ?
-                    """, userId, bookingId);
         } catch (EmptyResultDataAccessException e) {
             throw new NoActiveCodeException();
         }

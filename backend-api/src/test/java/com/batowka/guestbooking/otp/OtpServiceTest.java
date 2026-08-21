@@ -74,7 +74,7 @@ class OtpServiceTest extends AbstractIntegrationTest {
         issue(102L);
         String code = issuedCode();
 
-        var result = tx.execute(s -> otp.verify(guest.getId(), 102L, code));
+        var result = tx.execute(s -> otp.verifyByAction(guest.getId(), "CREATE_BOOKING", code));
 
         assertThat(result.action()).isEqualTo("CREATE_BOOKING");
         assertThat(result.payload().get("booking_id").asLong()).isEqualTo(102L);
@@ -89,15 +89,15 @@ class OtpServiceTest extends AbstractIntegrationTest {
 
         for (int i = 0; i < 2; i++) {
             assertThatThrownBy(() -> tx.executeWithoutResult(s ->
-                    otp.verify(guest.getId(), 103L, "000000")))
+                    otp.verifyByAction(guest.getId(), "CREATE_BOOKING", "000000")))
                     .isInstanceOf(InvalidCodeException.class);
         }
         assertThatThrownBy(() -> tx.executeWithoutResult(s ->
-                otp.verify(guest.getId(), 103L, "000000")))
+                otp.verifyByAction(guest.getId(), "CREATE_BOOKING", "000000")))
                 .isInstanceOf(CodeExpiredException.class);
         // после исчерпания даже верный код не работает
         assertThatThrownBy(() -> tx.executeWithoutResult(s ->
-                otp.verify(guest.getId(), 103L, issuedCode())))
+                otp.verifyByAction(guest.getId(), "CREATE_BOOKING", issuedCode())))
                 .isInstanceOf(NoActiveCodeException.class);
     }
 
@@ -108,7 +108,7 @@ class OtpServiceTest extends AbstractIntegrationTest {
         jdbc.update("update otp_challenges set expires_at = now() - interval '1 second'");
 
         assertThatThrownBy(() -> tx.executeWithoutResult(s ->
-                otp.verify(guest.getId(), 104L, code)))
+                otp.verifyByAction(guest.getId(), "CREATE_BOOKING", code)))
                 .isInstanceOf(InvalidCodeException.class);
     }
 
@@ -123,27 +123,13 @@ class OtpServiceTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void resendWithinMinuteIsRejectedAfterMinuteAllowed() {
-        issue(106L);
-
-        assertThatThrownBy(() -> tx.executeWithoutResult(s -> otp.resend(guest, 106L)))
-                .isInstanceOf(ResendTooSoonException.class);
-
-        jdbc.update("update otp_challenges set created_at = now() - interval '2 minutes'");
-        tx.executeWithoutResult(s -> otp.resend(guest, 106L));
-
-        assertThat(jdbc.queryForObject(
-                "select count(*) from outbox where event_type = 'OTP_CODE'",
-                Integer.class)).isEqualTo(2);
-    }
-
-    @Test
-    void codeForAnotherBookingIsNotAccepted() {
+    void codeForAnotherActionIsNotAccepted() {
         issue(107L);
         String code = issuedCode();
 
+        // код выпущен для CREATE_BOOKING — по другому action активного челленджа нет
         assertThatThrownBy(() -> tx.executeWithoutResult(s ->
-                otp.verify(guest.getId(), 999L, code)))
+                otp.verifyByAction(guest.getId(), "RESCHEDULE", code)))
                 .isInstanceOf(NoActiveCodeException.class);
     }
 }

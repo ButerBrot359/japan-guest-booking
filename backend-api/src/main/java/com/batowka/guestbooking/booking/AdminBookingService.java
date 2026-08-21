@@ -41,7 +41,7 @@ public class AdminBookingService {
         UserAccount guest = b.getUser();
         int updated = jdbc.update("""
                 update bookings set status = 'CANCELLED', cancelled_by = 'ADMIN'
-                where id = ? and status in ('PENDING_OTP', 'CONFIRMED')
+                where id = ? and status = 'CONFIRMED'
                 """, bookingId);
         if (updated == 0) {
             throw new BookingExpiredException(); // уже отменена

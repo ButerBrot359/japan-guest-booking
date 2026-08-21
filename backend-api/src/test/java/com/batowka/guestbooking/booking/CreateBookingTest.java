@@ -40,21 +40,43 @@ class CreateBookingTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void createHoldsDatesAndIssuesOtp() throws Exception {
+    void createConfirmsImmediately() throws Exception {
         Long id = guest("+81320000001", 777101L);
 
         mvc.perform(post("/api/bookings").cookie(auth(id))
                         .contentType(APPLICATION_JSON).content(body("2027-06-01", "2027-06-05")))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.bookingId").isNumber())
-                .andExpect(jsonPath("$.willReplaceBooking").value(org.hamcrest.Matchers.nullValue()));
+                .andExpect(jsonPath("$.bookingId").isNumber());
 
         assertThat(jdbc.queryForObject(
                 "select status from bookings order by id desc limit 1", String.class))
-                .isEqualTo("PENDING_OTP");
+                .isEqualTo("CONFIRMED");
+        // ОТП больше не выпускается, уведомление о брони уходит сразу
         assertThat(jdbc.queryForObject(
-                "select count(*) from outbox where event_type = 'OTP_CODE'", Integer.class))
+                "select count(*) from otp_challenges", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject(
+                "select count(*) from outbox where event_type = 'BOOKING_CONFIRMED'", Integer.class))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void newBookingReplacesOldConfirmed() throws Exception {
+        Long id = guest("+81320000004", 777104L);
+        jdbc.update("""
+                insert into bookings(user_id, check_in, check_out, status)
+                values (?, '2027-08-01', '2027-08-05', 'CONFIRMED')
+                """, id);
+
+        mvc.perform(post("/api/bookings").cookie(auth(id))
+                        .contentType(APPLICATION_JSON).content(body("2027-09-01", "2027-09-03")))
+                .andExpect(status().isCreated());
+
+        assertThat(jdbc.queryForObject(
+                "select status from bookings where check_in = '2027-08-01'", String.class))
+                .isEqualTo("CANCELLED");
+        assertThat(jdbc.queryForObject(
+                "select status from bookings where check_in = '2027-09-01'", String.class))
+                .isEqualTo("CONFIRMED");
     }
 
     @Test
@@ -70,34 +92,6 @@ class CreateBookingTest extends AbstractIntegrationTest {
                         .contentType(APPLICATION_JSON).content(body("2027-07-03", "2027-07-08")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DATES_TAKEN"));
-    }
-
-    @Test
-    void overlapWithOwnBookingHintsReschedule() throws Exception {
-        Long id = guest("+81320000004", 777104L);
-        jdbc.update("""
-                insert into bookings(user_id, check_in, check_out, status)
-                values (?, '2027-08-01', '2027-08-05', 'CONFIRMED')
-                """, id);
-
-        mvc.perform(post("/api/bookings").cookie(auth(id))
-                        .contentType(APPLICATION_JSON).content(body("2027-08-03", "2027-08-08")))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("OVERLAPS_OWN_BOOKING"));
-    }
-
-    @Test
-    void existingActiveBookingIsReportedAsWillReplace() throws Exception {
-        Long id = guest("+81320000005", 777105L);
-        jdbc.update("""
-                insert into bookings(user_id, check_in, check_out, status)
-                values (?, '2027-09-01', '2027-09-05', 'CONFIRMED')
-                """, id);
-
-        mvc.perform(post("/api/bookings").cookie(auth(id))
-                        .contentType(APPLICATION_JSON).content(body("2027-10-01", "2027-10-05")))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.willReplaceBooking.checkIn").value("2027-09-01"));
     }
 
     @Test

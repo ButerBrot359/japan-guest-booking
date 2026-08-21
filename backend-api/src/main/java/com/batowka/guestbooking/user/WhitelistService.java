@@ -66,7 +66,7 @@ public class WhitelistService {
         }
         Integer active = jdbc.queryForObject("""
                 select count(*) from bookings
-                where user_id = ? and status in ('PENDING_OTP', 'CONFIRMED') and check_out > ?
+                where user_id = ? and status = 'CONFIRMED' and check_out > ?
                 """, Integer.class, id, LocalDate.now(BookingService.JST));
         if (active != null && active > 0) {
             throw new ActiveBookingExistsException();

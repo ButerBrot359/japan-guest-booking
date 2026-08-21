@@ -1,7 +1,6 @@
 package com.batowka.guestbooking.booking;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
@@ -30,9 +29,6 @@ public class BookingController {
                                 @Size(max = 500) String comment) {
     }
 
-    public record ConfirmRequest(@NotBlank String code) {
-    }
-
     public record RescheduleRequest(@NotNull LocalDate checkIn, @NotNull LocalDate checkOut) {
     }
 
@@ -47,19 +43,11 @@ public class BookingController {
                 body.checkIn(), body.checkOut(), body.comment());
     }
 
-    @PostMapping("/{id}/confirm")
-    public ResponseEntity<Void> confirm(@PathVariable long id,
-                                        @Valid @RequestBody ConfirmRequest body,
-                                        Authentication auth) {
-        bookingService.confirm((Long) auth.getPrincipal(), id, body.code());
-        return ResponseEntity.noContent().build();
-    }
-
     @PatchMapping("/{id}")
     public ResponseEntity<Void> reschedule(@PathVariable long id,
                                            @Valid @RequestBody RescheduleRequest body,
                                            Authentication auth) {
-        bookingService.requestReschedule((Long) auth.getPrincipal(), id,
+        bookingService.reschedule((Long) auth.getPrincipal(), id,
                 body.checkIn(), body.checkOut());
         return ResponseEntity.noContent().build();
     }
@@ -70,21 +58,9 @@ public class BookingController {
         bookingService.updateComment((Long) auth.getPrincipal(), body.comment());
     }
 
-    @DeleteMapping("/pending")
-    public ResponseEntity<Void> cancelPending(Authentication auth) {
-        bookingService.cancelPending((Long) auth.getPrincipal());
-        return ResponseEntity.noContent().build();
-    }
-
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> cancel(@PathVariable long id, Authentication auth) {
-        bookingService.requestCancel((Long) auth.getPrincipal(), id);
-        return ResponseEntity.noContent().build();
-    }
-
-    @PostMapping("/{id}/resend-code")
-    public ResponseEntity<Void> resendCode(@PathVariable long id, Authentication auth) {
-        bookingService.resendCode((Long) auth.getPrincipal(), id);
+        bookingService.cancel((Long) auth.getPrincipal(), id);
         return ResponseEntity.noContent().build();
     }
 }

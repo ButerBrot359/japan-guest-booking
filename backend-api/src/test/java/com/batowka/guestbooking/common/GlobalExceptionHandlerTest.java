@@ -15,8 +15,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -55,7 +55,7 @@ class GlobalExceptionHandlerTest extends AbstractIntegrationTest {
     @Test
     void unknownBookingIdGives404WithHonestText() throws Exception {
         Long id = guest("+81350000009", 778109L);
-        mvc.perform(post("/api/bookings/999999/resend-code").cookie(auth(id)))
+        mvc.perform(delete("/api/bookings/999999").cookie(auth(id)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("Бронь не найдена"));
