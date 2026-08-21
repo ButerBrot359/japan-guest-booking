@@ -78,7 +78,16 @@ public class OtpService {
     /** Проверяет код активного челленджа гостя для конкретной брони. */
     @Transactional(propagation = Propagation.MANDATORY)
     public ChallengeResult verify(Long userId, long bookingId, String code) {
-        Map<String, Object> row = findActive(userId, bookingId);
+        return verifyRow(findActive(userId, bookingId), code);
+    }
+
+    /** Проверяет код активного челленджа гостя по типу действия (вход — action LOGIN). */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ChallengeResult verifyByAction(Long userId, String action, String code) {
+        return verifyRow(findActiveByAction(userId, action), code);
+    }
+
+    private ChallengeResult verifyRow(Map<String, Object> row, String code) {
         long id = ((Number) row.get("id")).longValue();
         if (((java.sql.Timestamp) row.get("expires_at")).toInstant().isBefore(Instant.now())) {
             expireInNewTx(id);
@@ -115,6 +124,19 @@ public class OtpService {
         JsonNode payload = objectMapper.readTree((String) row.get("payload"));
         issue(user, (String) row.get("action"),
                 objectMapper.convertValue(payload, Map.class));
+    }
+
+    private Map<String, Object> findActiveByAction(Long userId, String action) {
+        try {
+            return jdbc.queryForMap("""
+                    select id, action, payload::text as payload, code_hash,
+                           expires_at, created_at
+                    from otp_challenges
+                    where user_id = ? and status = 'PENDING' and action = ?
+                    """, userId, action);
+        } catch (EmptyResultDataAccessException e) {
+            throw new NoActiveCodeException();
+        }
     }
 
     private Map<String, Object> findActive(Long userId, long bookingId) {

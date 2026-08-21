@@ -34,6 +34,9 @@ public class AuthController {
     public record LoginRequest(@NotBlank String phone) {
     }
 
+    public record VerifyRequest(@NotBlank String phone, @NotBlank String code) {
+    }
+
     public record AdminLoginRequest(@NotBlank String phone, @NotBlank String password) {
     }
 
@@ -42,6 +45,12 @@ public class AuthController {
         rateLimiter.check(request.getRemoteAddr());
         loginService.requestCode(body.phone());
         return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/verify")
+    public ResponseEntity<Void> verify(@Valid @RequestBody VerifyRequest body, HttpServletRequest request) {
+        rateLimiter.check(request.getRemoteAddr());
+        return noContentWithCookie(loginService.verify(body.phone(), body.code()), COOKIE_TTL);
     }
 
     @PostMapping("/admin-login")

@@ -17,6 +17,7 @@ public class LoginService {
 
     private final UserAccountRepository users;
     private final OtpService otp;
+    private final JwtService jwt;
 
     /** Шаг 1 входа: код в Telegram. Куку не выдаёт. */
     @Transactional
@@ -27,6 +28,14 @@ public class LoginService {
             throw new TelegramNotLinkedException();
         }
         otp.issue(user, "LOGIN", Map.of());
+    }
+
+    /** Шаг 2 входа: проверка кода. Возвращает JWT для куки. */
+    @Transactional
+    public String verify(String rawPhone, String code) {
+        UserAccount user = findFriend(rawPhone);
+        otp.verifyByAction(user.getId(), "LOGIN", code);
+        return jwt.issue(user.getId(), user.getRole());
     }
 
     UserAccount findFriend(String rawPhone) {
