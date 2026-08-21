@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useGuestGreetings, useSetGreetings } from '../../api/queries'
 
 export function GreetingsEditor({ guestId, onClose }: { guestId: number; onClose: () => void }) {
   const current = useGuestGreetings(guestId)
   const save = useSetGreetings()
   const [lines, setLines] = useState<string[]>([])
+  const initialized = useRef(false)
 
-  // подставляем текущие приветствия, когда загрузились
+  // подставляем текущие приветствия только один раз при первой загрузке — иначе
+  // рефетч по window-focus (staleTime 30с, refetchOnWindowFocus) затирает несохранённый ввод
   useEffect(() => {
-    if (current.data) setLines(current.data.length ? current.data : [''])
+    if (initialized.current || !current.data) return
+    initialized.current = true
+    setLines(current.data.length ? current.data : [''])
   }, [current.data])
 
   return (

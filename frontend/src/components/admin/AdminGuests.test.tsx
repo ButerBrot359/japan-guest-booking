@@ -47,6 +47,18 @@ test('удаление гостя после подтверждения', async 
   await waitFor(() => expect(screen.getByText(/удалён/i)).toBeInTheDocument())
 })
 
+test('у админа и удалённого гостя нет кнопок действий', async () => {
+  mockState.adminGuests = [
+    { id: 1, phone: '+79990000001', name: 'Начальник', role: 'ADMIN', telegramLinked: true, deletedAt: null },
+    { id: 2, phone: '+79990000002', name: 'Бывший', role: 'FRIEND', telegramLinked: false, deletedAt: '2026-08-01T00:00:00Z' },
+  ]
+  renderSection()
+  await screen.findByText('Начальник')
+  await screen.findByText('Бывший')
+  expect(screen.queryByRole('button', { name: 'Удалить' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Приветствия' })).not.toBeInTheDocument()
+})
+
 test('редактор приветствий грузит текущие и сохраняет', async () => {
   mockState.adminGuests = [
     { id: 1, phone: '+79990000001', name: 'Гость', role: 'FRIEND', telegramLinked: false, deletedAt: null },
