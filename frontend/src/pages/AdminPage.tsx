@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLogout, useMe } from '../api/queries'
 import { AdminAccessRequests } from '../components/admin/AdminAccessRequests'
+import { AdminGuests } from '../components/admin/AdminGuests'
 import { AdminLoginCard } from '../components/admin/AdminLoginCard'
 
 type Tab = 'requests' | 'guests'
@@ -27,7 +28,7 @@ export function AdminPage() {
         <button type="button" className={tabClass('guests')} onClick={() => setTab('guests')}>Гости</button>
       </nav>
       {tab === 'requests' && <AdminAccessRequests />}
-      {tab === 'guests' && <div>Гости</div>}
+      {tab === 'guests' && <AdminGuests />}
     </div>
   )
 }
