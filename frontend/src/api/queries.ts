@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from './client'
-import type { CalendarResponse, CreateResult, Me, MyBookings } from './types'
+import type {
+  AccessRequestRow, AccessRequestStatus, AdminUserRow, CalendarResponse, CreateResult, Me, MyBookings,
+} from './types'
 
 export function useCalendar(fromIso: string, toIso: string) {
   return useQuery({
@@ -107,5 +109,73 @@ export function useUpdateComment() {
   return useMutation({
     mutationFn: (comment: string | null) => api.patch<void>('/bookings/active', { comment }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['my-bookings'] }),
+  })
+}
+
+export function useAdminLogin() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { phone: string; password: string }) => api.post<void>('/auth/admin-login', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
+  })
+}
+
+export function useAccessRequests(status: AccessRequestStatus) {
+  return useQuery({
+    queryKey: ['admin', 'access-requests', status],
+    queryFn: () => api.get<AccessRequestRow[]>(`/admin/access-requests?status=${status}`),
+  })
+}
+
+export function useApproveRequest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.post<void>(`/admin/access-requests/${id}/approve`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'access-requests'] }),
+  })
+}
+
+export function useRejectRequest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.post<void>(`/admin/access-requests/${id}/reject`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'access-requests'] }),
+  })
+}
+
+export function useAdminGuests() {
+  return useQuery({ queryKey: ['admin', 'users'], queryFn: () => api.get<AdminUserRow[]>('/admin/users') })
+}
+
+export function useAddGuest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { phone: string; name: string }) => api.post<void>('/admin/users', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
+  })
+}
+
+export function useDeleteGuest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.del<void>(`/admin/users/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
+  })
+}
+
+export function useGuestGreetings(id: number) {
+  return useQuery({
+    queryKey: ['admin', 'greetings', id],
+    queryFn: () => api.get<string[]>(`/admin/users/${id}/greetings`),
+    enabled: id > 0,
+  })
+}
+
+export function useSetGreetings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, greetings }: { id: number; greetings: string[] }) =>
+      api.put<void>(`/admin/users/${id}/greetings`, { greetings }),
+    onSuccess: (_r, { id }) => qc.invalidateQueries({ queryKey: ['admin', 'greetings', id] }),
   })
 }

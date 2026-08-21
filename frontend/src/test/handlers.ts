@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import type { CalendarDay, Me, PastVisit } from '../api/types'
+import type { AccessRequestRow, AdminUserRow, CalendarDay, Me, PastVisit } from '../api/types'
 
 export interface MockState {
   me: Me | null
@@ -7,9 +7,16 @@ export interface MockState {
   history: PastVisit[]
   comment: string | null
   pendingLoginPhone: string | null
+  adminGuests: AdminUserRow[]
+  accessRequests: AccessRequestRow[]
+  guestGreetings: Record<number, string[]>
+  adminPassword: string   // пароль, который мок считает верным
 }
 
-export const mockState: MockState = { me: null, days: [], history: [], comment: null, pendingLoginPhone: null }
+export const mockState: MockState = {
+  me: null, days: [], history: [], comment: null, pendingLoginPhone: null,
+  adminGuests: [], accessRequests: [], guestGreetings: {}, adminPassword: 'admin',
+}
 
 /** Запросы к /api/calendar, зафиксированные для проверки диапазона дат в тестах. */
 export const capturedCalendarRequests: { from: string; to: string }[] = []
@@ -20,6 +27,10 @@ export function resetMockState() {
   mockState.history = []
   mockState.comment = null
   mockState.pendingLoginPhone = null
+  mockState.adminGuests = []
+  mockState.accessRequests = []
+  mockState.guestGreetings = {}
+  mockState.adminPassword = 'admin'
   capturedCalendarRequests.length = 0
 }
 
@@ -81,4 +92,50 @@ export const handlers = [
           history: mockState.history,
         })
       : HttpResponse.json({ code: 'UNAUTHORIZED', message: 'Требуется вход' }, { status: 401 })),
+  http.post('/api/auth/admin-login', async ({ request }) => {
+    const { phone, password } = (await request.json()) as { phone: string; password: string }
+    if (password !== mockState.adminPassword) {
+      return HttpResponse.json({ code: 'INVALID_CREDENTIALS', message: '' }, { status: 401 })
+    }
+    mockState.me = {
+      phone, name: 'Админ', role: 'ADMIN', telegramLinked: true, greeting: null, activeBooking: null,
+    }
+    return new HttpResponse(null, { status: 204 })
+  }),
+  http.get('/api/admin/access-requests', ({ request }) => {
+    const status = new URL(request.url).searchParams.get('status') ?? 'PENDING'
+    return HttpResponse.json(mockState.accessRequests.filter((r) => r.status === status))
+  }),
+  http.post('/api/admin/access-requests/:id/approve', ({ params }) => {
+    const r = mockState.accessRequests.find((x) => x.id === Number(params.id))
+    if (r) r.status = 'APPROVED'
+    return new HttpResponse(null, { status: 204 })
+  }),
+  http.post('/api/admin/access-requests/:id/reject', ({ params }) => {
+    const r = mockState.accessRequests.find((x) => x.id === Number(params.id))
+    if (r) r.status = 'REJECTED'
+    return new HttpResponse(null, { status: 204 })
+  }),
+  http.get('/api/admin/users', () => HttpResponse.json(mockState.adminGuests)),
+  http.post('/api/admin/users', async ({ request }) => {
+    const { phone, name } = (await request.json()) as { phone: string; name: string }
+    if (mockState.adminGuests.some((g) => g.phone === phone && g.deletedAt == null)) {
+      return HttpResponse.json({ code: 'ALREADY_MEMBER', message: '' }, { status: 409 })
+    }
+    const id = mockState.adminGuests.length + 1
+    mockState.adminGuests.push({ id, phone, name, role: 'FRIEND', telegramLinked: false, deletedAt: null })
+    return new HttpResponse(null, { status: 201 })
+  }),
+  http.delete('/api/admin/users/:id', ({ params }) => {
+    const g = mockState.adminGuests.find((x) => x.id === Number(params.id))
+    if (g) g.deletedAt = '2026-08-22T00:00:00Z'
+    return new HttpResponse(null, { status: 204 })
+  }),
+  http.get('/api/admin/users/:id/greetings', ({ params }) =>
+    HttpResponse.json(mockState.guestGreetings[Number(params.id)] ?? [])),
+  http.put('/api/admin/users/:id/greetings', async ({ params, request }) => {
+    const { greetings } = (await request.json()) as { greetings: string[] }
+    mockState.guestGreetings[Number(params.id)] = greetings.filter((g) => g.trim() !== '')
+    return new HttpResponse(null, { status: 204 })
+  }),
 ]
