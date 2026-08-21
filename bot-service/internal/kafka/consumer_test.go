@@ -109,6 +109,18 @@ func TestOtpCodeIsRendered(t *testing.T) {
 	}
 }
 
+func TestOtpCodeLoginText(t *testing.T) {
+	sender := &fakeSender{}
+	c := newConsumerCore(sender)
+
+	_ = c.handle(context.Background(), eventJSON("e-otp-login", "OTP_CODE",
+		`{"chat_id":42,"code":"123456","action":"LOGIN","expires_at":"2026-01-01T00:00:00Z"}`))
+
+	if len(sender.sent) != 1 || !strings.Contains(sender.sent[0], "Код для входа: 123456") {
+		t.Fatalf("ожидали текст про вход, получили: %q", sender.sent[0])
+	}
+}
+
 func TestBookingEventsAreRendered(t *testing.T) {
 	sender := &fakeSender{}
 	c := newConsumerCore(sender)

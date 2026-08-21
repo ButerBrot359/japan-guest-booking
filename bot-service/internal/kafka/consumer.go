@@ -67,8 +67,11 @@ func (c *consumerCore) handle(ctx context.Context, raw []byte) error {
 			log.Printf("битый payload OTP_CODE: %v", err)
 			return nil
 		}
-		return c.send(ctx, env.EventID, p.ChatID,
-			"Код подтверждения: "+p.Code+". Действует 5 минут.")
+		text := "Код подтверждения: " + p.Code + ". Действует 5 минут."
+		if p.Action == "LOGIN" {
+			text = "Код для входа: " + p.Code + ". Действует 5 минут."
+		}
+		return c.send(ctx, env.EventID, p.ChatID, text)
 	case "BOOKING_CONFIRMED":
 		return c.renderBooking(ctx, env, "Бронь подтверждена")
 	case "BOOKING_CANCELLED":
