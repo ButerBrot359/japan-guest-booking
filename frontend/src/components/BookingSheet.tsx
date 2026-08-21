@@ -4,7 +4,6 @@ import { isoToRu, nightsBetween, nightsWord } from '../lib/dates'
 
 const ERROR_TEXTS: Record<string, string> = {
   DATES_TAKEN: 'Эти даты только что заняли — выбери другие.',
-  OVERLAPS_OWN_BOOKING: 'Эти даты пересекаются с твоей текущей бронью.',
   TELEGRAM_NOT_LINKED: 'Сначала привяжи Telegram — напиши боту и поделись контактом.',
   VALIDATION_ERROR: 'Даты в прошлом или некорректны — выбери заново.',
 }
@@ -34,7 +33,7 @@ export function BookingSheet({ selection, willReplace, onSubmit, onDismiss, pend
         </p>
       )}
       <input
-        className="w-full rounded-xl border border-muted/40 bg-paper p-2 text-sm"
+        className="w-full rounded-xl border border-muted/40 bg-paper p-2 text-base lg:text-sm"
         placeholder="Если едете не одни — напишите, кто приедет с вами"
         maxLength={500}
         value={comment}
@@ -51,7 +50,6 @@ export function BookingSheet({ selection, willReplace, onSubmit, onDismiss, pend
       {errorCode && (
         <p className="mt-2 text-xs text-hanko">{ERROR_TEXTS[errorCode] ?? 'Что-то пошло не так — попробуй ещё раз.'}</p>
       )}
-      <p className="mt-1.5 text-center text-xs text-muted">код подтверждения придёт в Telegram</p>
     </div>
   )
 }

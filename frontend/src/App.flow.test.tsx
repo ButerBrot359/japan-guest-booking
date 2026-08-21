@@ -29,11 +29,20 @@ function seedFreeSeptember() {
   mockState.days = []
 }
 
-function loginAs(me: Partial<typeof mockState.me>) {
+/** Заранее сажает гостя залогиненным (без прохождения формы входа). */
+function seedMe(me: Partial<typeof mockState.me>) {
   mockState.me = {
     phone: '+79990001122', name: 'Маша', role: 'FRIEND', telegramLinked: true,
     greeting: null, activeBooking: null, ...me,
   } as NonNullable<typeof mockState.me>
+}
+
+/** Проходит форму входа через UI: номер → «Получить код» → код 123456 → «Войти». */
+async function loginAs(phoneDigits: string) {
+  await userEvent.type(screen.getByTestId('phone-input'), phoneDigits)
+  await userEvent.click(screen.getByRole('button', { name: 'Получить код' }))
+  await userEvent.type(await screen.findByLabelText('Код из Telegram'), '123456')
+  await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
 }
 
 // Оба номера дня пары (чек-ин/чек-аут) встречаются в обоих отрисованных месяцах,
@@ -60,17 +69,14 @@ async function clickFreeDayPair([first, second]: [string, string]) {
   await userEvent.click(secondBtn)
 }
 
-test('полный create-флоу: выбор дат → шторка → OTP → подтверждена', async () => {
+test('полный create-флоу: выбор дат → шторка → бронь сразу подтверждена', async () => {
   seedFreeSeptember()
-  loginAs({})
+  seedMe({})
   renderApp()
   await screen.findByText(/Привет, Маша!/)
 
   await clickFreeDayPair(['10', '13'])
   await userEvent.click(screen.getByRole('button', { name: 'Забронировать' }))
-
-  await userEvent.type(await screen.findByLabelText('Код из Telegram'), '471523')
-  await userEvent.click(screen.getByRole('button', { name: 'Подтвердить' }))
 
   expect(await screen.findByText(/мы очень вас ждём/i)).toBeInTheDocument()
   expect(screen.getByText(/свяжемся с вами/i)).toBeInTheDocument()
@@ -78,44 +84,34 @@ test('полный create-флоу: выбор дат → шторка → OTP �
   expect(await screen.findByText('подтверждена')).toBeInTheDocument()
 })
 
-test('отмена CONFIRMED: диалог → OTP без «Отменить бронь», без тёплого экрана', async () => {
+test('отмена CONFIRMED: диалог закрывается сразу, без тёплого экрана', async () => {
   seedFreeSeptember()
-  loginAs({ activeBooking: { id: 7, checkIn: '2026-09-10', checkOut: '2026-09-13', status: 'CONFIRMED' } })
+  seedMe({ activeBooking: { id: 7, checkIn: '2026-09-10', checkOut: '2026-09-13', status: 'CONFIRMED' } })
   renderApp()
   await userEvent.click(await screen.findByRole('button', { name: 'Отменить' }))
   await userEvent.click(await screen.findByRole('button', { name: 'Да, отменить' }))
-  await screen.findByLabelText('Код из Telegram')
-  expect(screen.queryByRole('button', { name: 'Отменить бронь' })).not.toBeInTheDocument()
-
-  await userEvent.type(screen.getByLabelText('Код из Telegram'), '471523')
-  await userEvent.click(screen.getByRole('button', { name: 'Подтвердить' }))
-  await waitFor(() => expect(screen.queryByLabelText('Код из Telegram')).not.toBeInTheDocument())
+  await waitFor(() => expect(screen.queryByText(/Отменить бронь/)).not.toBeInTheDocument())
   expect(screen.queryByText(/мы очень вас ждём/i)).not.toBeInTheDocument()
 })
 
 test('перенос: режим выбора новых дат с подсказкой', async () => {
   seedFreeSeptember()
-  loginAs({ activeBooking: { id: 7, checkIn: '2026-09-10', checkOut: '2026-09-13', status: 'CONFIRMED' } })
+  seedMe({ activeBooking: { id: 7, checkIn: '2026-09-10', checkOut: '2026-09-13', status: 'CONFIRMED' } })
   renderApp()
   await userEvent.click(await screen.findByRole('button', { name: 'Перенести' }))
   expect(await screen.findByText(/выбери новые даты/)).toBeInTheDocument()
 })
 
-test('полный reschedule-флоу: перенос → новые даты → OTP с «перенос» в подзаголовке → тёплый экран → подтверждена', async () => {
+test('полный reschedule-флоу: перенос → новые даты → тёплый экран → подтверждена', async () => {
   seedFreeSeptember()
-  loginAs({ activeBooking: { id: 7, checkIn: '2026-09-10', checkOut: '2026-09-13', status: 'CONFIRMED' } })
+  seedMe({ activeBooking: { id: 7, checkIn: '2026-09-10', checkOut: '2026-09-13', status: 'CONFIRMED' } })
   renderApp()
 
   await userEvent.click(await screen.findByRole('button', { name: 'Перенести' }))
   await clickFreeDayPair(['11', '14'])
   await userEvent.click(screen.getByRole('button', { name: 'Забронировать' }))
 
-  expect(await screen.findByText(/перенос/)).toBeInTheDocument()
-  await userEvent.type(await screen.findByLabelText('Код из Telegram'), '471523')
-  await userEvent.click(screen.getByRole('button', { name: 'Подтвердить' }))
-
   expect(await screen.findByText(/мы очень вас ждём/i)).toBeInTheDocument()
-  await waitFor(() => expect(screen.queryByLabelText('Код из Telegram')).not.toBeInTheDocument())
   await userEvent.click(screen.getByRole('button', { name: 'Хорошо' }))
   expect(await screen.findByText('подтверждена')).toBeInTheDocument()
 })
@@ -126,8 +122,7 @@ test('аноним кликает дату → модалка логина → �
   const day = (await screen.findAllByRole('button', { name: /10 сентября.*свободно/i }))[0]
   await userEvent.click(day)
   expect(await screen.findByText(/войдите, чтобы выбрать даты/i)).toBeInTheDocument()
-  await userEvent.type(screen.getByTestId('phone-input'), '7787886432')
-  await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
+  await loginAs('7787886432')
   await waitFor(() =>
     expect(screen.queryByText(/войдите, чтобы выбрать даты/i)).not.toBeInTheDocument())
   expect((await screen.findAllByRole('button', { name: /10 сентября/i }))[0])
@@ -136,7 +131,7 @@ test('аноним кликает дату → модалка логина → �
 
 test('смена режима сбрасывает устаревшую ошибку create и выбор дат', async () => {
   seedFreeSeptember()
-  loginAs({ activeBooking: { id: 7, checkIn: '2026-09-10', checkOut: '2026-09-13', status: 'CONFIRMED' } })
+  seedMe({ activeBooking: { id: 7, checkIn: '2026-09-10', checkOut: '2026-09-13', status: 'CONFIRMED' } })
   server.use(http.post('/api/bookings', () =>
     HttpResponse.json({ code: 'DATES_TAKEN', message: '' }, { status: 409 })))
   renderApp()

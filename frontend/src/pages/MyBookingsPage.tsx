@@ -2,19 +2,17 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, Navigate, useNavigate } from 'react-router'
 import { ApiError } from '../api/client'
-import { useCancelBooking, useCancelPending, useMe, useMyBookings, useUpdateComment } from '../api/queries'
+import { useCancelBooking, useMe, useMyBookings, useUpdateComment } from '../api/queries'
 import { Header } from '../components/Header'
-import { OtpModal } from '../components/OtpModal'
 import { isoToRu, nightsWord } from '../lib/dates'
 
-type Flow = 'idle' | 'confirm-cancel' | 'otp'
+type Flow = 'idle' | 'confirm-cancel'
 
 export function MyBookingsPage() {
   const me = useMe()
   const bookings = useMyBookings()
   const update = useUpdateComment()
   const cancel = useCancelBooking()
-  const cancelPending = useCancelPending()
   const navigate = useNavigate()
   const qc = useQueryClient()
 
@@ -36,11 +34,6 @@ export function MyBookingsPage() {
 
   const saveComment = () => {
     update.mutate(draft.trim() === '' ? null : draft.trim(), { onSuccess: () => setEditing(false) })
-  }
-
-  const closeOtp = () => {
-    setFlow('idle')
-    qc.invalidateQueries({ queryKey: ['my-bookings'] })
   }
 
   return (
@@ -92,31 +85,6 @@ export function MyBookingsPage() {
                   type="button"
                   className="flex-1 rounded-lg border border-hanko py-1.5 text-hanko"
                   onClick={() => { cancel.reset(); setFlow('confirm-cancel') }}
-                >
-                  Отменить
-                </button>
-              </div>
-            </div>
-          )}
-
-          {active?.status === 'PENDING_OTP' && (
-            <div className="rounded-2xl border border-warn-border bg-warn-bg p-3 text-sm">
-              {isoToRu(active.checkIn)} → {isoToRu(active.checkOut)}{' '}
-              <span className="rounded-md bg-warn-badge px-1.5 py-0.5 text-[10px] text-paper">ждёт код</span>
-              <div className="mt-2 flex gap-2 text-xs">
-                <button
-                  type="button"
-                  className="flex-1 rounded-lg border border-ink py-1.5"
-                  onClick={() => setFlow('otp')}
-                >
-                  Ввести код
-                </button>
-                <button
-                  type="button"
-                  className="flex-1 rounded-lg border border-hanko py-1.5 text-hanko"
-                  onClick={() => cancelPending.mutate(undefined, {
-                    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-bookings'] }),
-                  })}
                 >
                   Отменить
                 </button>
@@ -185,7 +153,9 @@ export function MyBookingsPage() {
                 onClick={() => setFlow('idle')}>Оставить</button>
               <button type="button" className="flex-1 rounded-lg bg-hanko py-2 text-paper disabled:opacity-50"
                 disabled={cancel.isPending}
-                onClick={() => cancel.mutate(active.id, { onSuccess: () => setFlow('otp') })}>
+                onClick={() => cancel.mutate(active.id, {
+                  onSuccess: () => { setFlow('idle'); qc.invalidateQueries({ queryKey: ['my-bookings'] }) },
+                })}>
                 Да, отменить
               </button>
             </div>
@@ -194,18 +164,6 @@ export function MyBookingsPage() {
             )}
           </div>
         </div>
-      )}
-
-      {flow === 'otp' && active && (
-        <OtpModal
-          bookingId={active.id}
-          subtitle={active.status === 'PENDING_OTP'
-            ? `заезд ${isoToRu(active.checkIn)} → выезд ${isoToRu(active.checkOut)}`
-            : 'отмена брони'}
-          showCancelPending={active.status === 'PENDING_OTP'}
-          onDone={closeOtp}
-          onClose={closeOtp}
-        />
       )}
     </div>
   )

@@ -2,14 +2,13 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { ApiError } from '../api/client'
 import {
-  useCalendar, useCancelBooking, useCancelPending, useCreateBooking,
+  useCalendar, useCancelBooking, useCreateBooking,
   useMe, useRescheduleBooking,
 } from '../api/queries'
 import { BookingSheet } from '../components/BookingSheet'
 import { Calendar, type Selection } from '../components/Calendar'
 import { Header } from '../components/Header'
 import { LoginModal } from '../components/LoginModal'
-import { OtpModal } from '../components/OtpModal'
 import { ProfileCard } from '../components/ProfileCard'
 import { addDays, addMonths, isoRange, isoToRu, todayIso } from '../lib/dates'
 import { pickDay } from '../lib/selection'
@@ -17,7 +16,6 @@ import { pickDay } from '../lib/selection'
 type Flow =
   | { kind: 'idle' }
   | { kind: 'selecting-reschedule' }
-  | { kind: 'otp'; bookingId: number; subtitle: string; cancelable: boolean; celebrate: boolean; checkIn: string; checkOut: string }
   | { kind: 'confirm-cancel' }
   | { kind: 'celebrate'; checkIn: string; checkOut: string }
 
@@ -39,7 +37,6 @@ export function CalendarPage() {
   const create = useCreateBooking()
   const reschedule = useRescheduleBooking()
   const cancel = useCancelBooking()
-  const cancelPending = useCancelPending()
 
   const days = new Map((calendar.data?.days ?? []).map((d) => [d.date, d]))
   const active = me.data?.activeBooking ?? null
@@ -84,12 +81,14 @@ export function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // вход завершился, пока была кликнута дата — досрочно выбираем её как заезд
+  // вход завершился — закрываем модалку; если вход начался с клика по дате,
+  // досрочно выбираем её как заезд
   useEffect(() => {
-    if (me.data != null && pendingDate != null) {
+    if (me.data == null) return
+    setLoginOpen(false)
+    if (pendingDate != null) {
       setSelection({ checkIn: pendingDate, checkOut: null })
       setPendingDate(null)
-      setLoginOpen(false)
     }
   }, [me.data, pendingDate])
 
@@ -128,7 +127,7 @@ export function CalendarPage() {
             const checkIn = selection.checkIn!
             const checkOut = selection.checkOut!
             resetSelection()
-            setFlow({ kind: 'otp', bookingId: active.id, subtitle: `перенос на ${isoToRu(checkIn)} → ${isoToRu(checkOut)}`, cancelable: false, celebrate: true, checkIn, checkOut })
+            setFlow({ kind: 'celebrate', checkIn, checkOut })
           },
         },
       )
@@ -136,11 +135,11 @@ export function CalendarPage() {
       create.mutate(
         { checkIn: selection.checkIn, checkOut: selection.checkOut, comment: comment || undefined },
         {
-          onSuccess: (r) => {
+          onSuccess: () => {
             const checkIn = selection.checkIn!
             const checkOut = selection.checkOut!
             resetSelection()
-            setFlow({ kind: 'otp', bookingId: r.bookingId, subtitle: `заезд ${isoToRu(checkIn)} → выезд ${isoToRu(checkOut)}`, cancelable: true, celebrate: true, checkIn, checkOut })
+            setFlow({ kind: 'celebrate', checkIn, checkOut })
           },
         },
       )
@@ -170,8 +169,6 @@ export function CalendarPage() {
               cancel.reset()
               setFlow({ kind: 'confirm-cancel' })
             }}
-            onEnterCode={() => active && setFlow({ kind: 'otp', bookingId: active.id, subtitle: `заезд ${isoToRu(active.checkIn)} → выезд ${isoToRu(active.checkOut)}`, cancelable: true, celebrate: true, checkIn: active.checkIn, checkOut: active.checkOut })}
-            onCancelPending={() => cancelPending.mutate()}
           />
         )}
       </div>
@@ -244,9 +241,7 @@ export function CalendarPage() {
                 onClick={() => setFlow({ kind: 'idle' })}>Оставить</button>
               <button type="button" className="flex-1 rounded-lg bg-hanko py-2 text-paper disabled:opacity-50"
                 disabled={cancel.isPending}
-                onClick={() => cancel.mutate(active.id, {
-                  onSuccess: () => setFlow({ kind: 'otp', bookingId: active.id, subtitle: 'отмена брони', cancelable: false, celebrate: false, checkIn: active.checkIn, checkOut: active.checkOut }),
-                })}>
+                onClick={() => cancel.mutate(active.id, { onSuccess: () => setFlow({ kind: 'idle' }) })}>
                 Да, отменить
               </button>
             </div>
@@ -255,18 +250,6 @@ export function CalendarPage() {
             )}
           </div>
         </div>
-      )}
-
-      {flow.kind === 'otp' && (
-        <OtpModal
-          bookingId={flow.bookingId}
-          subtitle={flow.subtitle}
-          showCancelPending={flow.cancelable}
-          onDone={() => (flow.celebrate
-            ? setFlow({ kind: 'celebrate', checkIn: flow.checkIn, checkOut: flow.checkOut })
-            : setFlow({ kind: 'idle' }))}
-          onClose={() => setFlow({ kind: 'idle' })}
-        />
       )}
 
       {flow.kind === 'celebrate' && (

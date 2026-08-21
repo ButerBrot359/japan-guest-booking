@@ -7,11 +7,9 @@ interface ProfileCardProps {
   me: Me
   onReschedule: () => void
   onCancel: () => void
-  onEnterCode: () => void
-  onCancelPending: () => void
 }
 
-export function ProfileCard({ me, onReschedule, onCancel, onEnterCode, onCancelPending }: ProfileCardProps) {
+export function ProfileCard({ me, onReschedule, onCancel }: ProfileCardProps) {
   const logout = useLogout()
   const b = me.activeBooking
   return (
@@ -37,18 +35,6 @@ export function ProfileCard({ me, onReschedule, onCancel, onEnterCode, onCancelP
             <button type="button" onClick={onReschedule}
               className="flex-1 rounded-lg border border-ink py-1.5">Перенести</button>
             <button type="button" onClick={onCancel}
-              className="flex-1 rounded-lg border border-hanko py-1.5 text-hanko">Отменить</button>
-          </div>
-        </div>
-      )}
-      {b?.status === 'PENDING_OTP' && (
-        <div className="rounded-2xl border border-warn-border bg-warn-bg p-3 text-sm">
-          Бронь {isoToRu(b.checkIn)} → {isoToRu(b.checkOut)}{' '}
-          <span className="rounded-md bg-warn-badge px-1.5 py-0.5 text-[10px] text-paper">ждёт код</span>
-          <div className="mt-2 flex gap-2 text-xs">
-            <button type="button" onClick={onEnterCode}
-              className="flex-1 rounded-lg border border-ink py-1.5">Ввести код</button>
-            <button type="button" onClick={onCancelPending}
               className="flex-1 rounded-lg border border-hanko py-1.5 text-hanko">Отменить</button>
           </div>
         </div>

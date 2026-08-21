@@ -12,7 +12,7 @@
   /* штриховка заблокированных дней */
   --color-hatch: #d8d0bf;
   --color-hatch-2: #e6dfd0;
-  /* предупреждение — плашка Telegram и статус PENDING_OTP */
+  /* предупреждение — плашка Telegram не привязан */
   --color-warn-bg: #fdf3d7;
   --color-warn-border: #dbc47f;
   --color-warn-text: #6b5a1f;

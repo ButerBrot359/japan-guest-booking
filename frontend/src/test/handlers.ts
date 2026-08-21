@@ -6,9 +6,10 @@ export interface MockState {
   days: CalendarDay[]
   history: PastVisit[]
   comment: string | null
+  pendingLoginPhone: string | null
 }
 
-export const mockState: MockState = { me: null, days: [], history: [], comment: null }
+export const mockState: MockState = { me: null, days: [], history: [], comment: null, pendingLoginPhone: null }
 
 /** Запросы к /api/calendar, зафиксированные для проверки диапазона дат в тестах. */
 export const capturedCalendarRequests: { from: string; to: string }[] = []
@@ -18,6 +19,7 @@ export function resetMockState() {
   mockState.days = []
   mockState.history = []
   mockState.comment = null
+  mockState.pendingLoginPhone = null
   capturedCalendarRequests.length = 0
 }
 
@@ -32,6 +34,14 @@ export const handlers = [
   }),
   http.post('/api/auth/login', async ({ request }) => {
     const { phone } = (await request.json()) as { phone: string }
+    mockState.pendingLoginPhone = phone
+    return new HttpResponse(null, { status: 202 })
+  }),
+  http.post('/api/auth/verify', async ({ request }) => {
+    const { phone, code } = (await request.json()) as { phone: string; code: string }
+    if (phone !== mockState.pendingLoginPhone || code !== '123456') {
+      return HttpResponse.json({ code: 'INVALID_CODE', message: 'Неверный код' }, { status: 400 })
+    }
     mockState.me = {
       phone, name: 'Маша', role: 'FRIEND', telegramLinked: true,
       greeting: null, activeBooking: null,
@@ -50,15 +60,10 @@ export const handlers = [
   http.post('/api/bookings', async ({ request }) => {
     const body = (await request.json()) as { checkIn: string; checkOut: string }
     if (mockState.me) {
-      mockState.me.activeBooking = { id: 100, checkIn: body.checkIn, checkOut: body.checkOut, status: 'PENDING_OTP' }
+      mockState.me.activeBooking = { id: 100, checkIn: body.checkIn, checkOut: body.checkOut, status: 'CONFIRMED' }
     }
-    return HttpResponse.json({ bookingId: 100, willReplaceBooking: null }, { status: 201 })
+    return HttpResponse.json({ bookingId: 100 }, { status: 201 })
   }),
-  http.post('/api/bookings/:id/confirm', () => {
-    if (mockState.me?.activeBooking) mockState.me.activeBooking.status = 'CONFIRMED'
-    return new HttpResponse(null, { status: 204 })
-  }),
-  http.post('/api/bookings/:id/resend-code', () => new HttpResponse(null, { status: 204 })),
   // конкретный путь /active — раньше динамического /:id, иначе тот перехватит первым
   http.patch('/api/bookings/active', async ({ request }) => {
     const { comment } = (await request.json()) as { comment: string | null }
@@ -66,10 +71,6 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 })
   }),
   http.patch('/api/bookings/:id', () => new HttpResponse(null, { status: 204 })),
-  http.delete('/api/bookings/pending', () => {
-    if (mockState.me) mockState.me.activeBooking = null
-    return new HttpResponse(null, { status: 204 })
-  }),
   http.delete('/api/bookings/:id', () => new HttpResponse(null, { status: 204 })),
   http.get('/api/me/bookings', () =>
     mockState.me

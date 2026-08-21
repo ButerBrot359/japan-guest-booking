@@ -8,7 +8,7 @@ const base: Me = {
   phone: '+79990001122', name: 'Аня', role: 'FRIEND',
   telegramLinked: true, greeting: null, activeBooking: null,
 }
-const noop = { onReschedule: vi.fn(), onCancel: vi.fn(), onEnterCode: vi.fn(), onCancelPending: vi.fn() }
+const noop = { onReschedule: vi.fn(), onCancel: vi.fn() }
 
 function renderCard(me: Me) {
   const qc = new QueryClient()
@@ -33,10 +33,4 @@ test('CONFIRMED-бронь: даты дд/мм/гггг, бейдж, кнопк�
   expect(screen.getByText('подтверждена')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Перенести' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Отменить' })).toBeInTheDocument()
-})
-
-test('PENDING_OTP-бронь: бейдж «ждёт код» и свои кнопки', () => {
-  renderCard({ ...base, activeBooking: { id: 6, checkIn: '2026-10-01', checkOut: '2026-10-03', status: 'PENDING_OTP' } })
-  expect(screen.getByText('ждёт код')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Ввести код' })).toBeInTheDocument()
 })

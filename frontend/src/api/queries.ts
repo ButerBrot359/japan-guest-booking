@@ -22,9 +22,14 @@ export function useMe() {
 }
 
 export function useLogin() {
+  // шаг 1: только отправляет код в Telegram, куки ещё нет
+  return useMutation({ mutationFn: (phone: string) => api.post<void>('/auth/login', { phone }) })
+}
+
+export function useVerifyLogin() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (phone: string) => api.post<void>('/auth/login', { phone }),
+    mutationFn: (body: { phone: string; code: string }) => api.post<void>('/auth/verify', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
   })
 }
@@ -56,44 +61,27 @@ export function useCreateBooking() {
   })
 }
 
-export function useConfirmBooking() {
+export function useRescheduleBooking() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ bookingId, code }: { bookingId: number; code: string }) =>
-      api.post<void>(`/bookings/${bookingId}/confirm`, { code }),
+    mutationFn: ({ bookingId, checkIn, checkOut }: { bookingId: number; checkIn: string; checkOut: string }) =>
+      api.patch<void>(`/bookings/${bookingId}`, { checkIn, checkOut }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['me'] })
       qc.invalidateQueries({ queryKey: ['calendar'] })
+      qc.invalidateQueries({ queryKey: ['my-bookings'] })
     },
   })
 }
 
-export function useResendCode() {
-  return useMutation({
-    mutationFn: (bookingId: number) => api.post<void>(`/bookings/${bookingId}/resend-code`),
-  })
-}
-
-export function useRescheduleBooking() {
-  return useMutation({
-    mutationFn: ({ bookingId, checkIn, checkOut }: { bookingId: number; checkIn: string; checkOut: string }) =>
-      api.patch<void>(`/bookings/${bookingId}`, { checkIn, checkOut }),
-  })
-}
-
 export function useCancelBooking() {
-  return useMutation({
-    mutationFn: (bookingId: number) => api.del<void>(`/bookings/${bookingId}`),
-  })
-}
-
-export function useCancelPending() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: () => api.del<void>('/bookings/pending'),
+    mutationFn: (bookingId: number) => api.del<void>(`/bookings/${bookingId}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['me'] })
       qc.invalidateQueries({ queryKey: ['calendar'] })
+      qc.invalidateQueries({ queryKey: ['my-bookings'] })
     },
   })
 }

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { server } from '../test/setup'
@@ -11,20 +11,59 @@ function renderCard() {
   return render(<QueryClientProvider client={qc}><LoginCard /></QueryClientProvider>)
 }
 
-test('успешный вход дёргает POST /api/auth/login', async () => {
+async function typePhone(digits: string) {
+  await userEvent.type(screen.getByTestId('phone-input'), digits)
+}
+
+test('после отправки номера показывает шаг кода и входит по верному коду', async () => {
   renderCard()
-  await userEvent.type(screen.getByTestId('phone-input'), '9990001122')
+  await typePhone('7787886432')
+  await userEvent.click(screen.getByRole('button', { name: 'Получить код' }))
+
+  const codeInput = await screen.findByLabelText('Код из Telegram')
+  await userEvent.type(codeInput, '123456')
   await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
-  // mockState.me выставляет MSW-ручка логина; ре-рендер профиля проверяет App-тест задачи 11
-  expect(mockState.me?.phone).toBe('+79990001122')
+  await waitFor(() => expect(mockState.me).not.toBeNull())
+})
+
+test('неверный код показывает ошибку и не пускает', async () => {
+  renderCard()
+  await typePhone('7787886432')
+  await userEvent.click(screen.getByRole('button', { name: 'Получить код' }))
+
+  const codeInput = await screen.findByLabelText('Код из Telegram')
+  await userEvent.type(codeInput, '000000')
+  await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
+  expect(await screen.findByText('Неверный код')).toBeInTheDocument()
+  expect(mockState.me).toBeNull()
+})
+
+test('TELEGRAM_NOT_LINKED показывает инструкцию про бота', async () => {
+  server.use(http.post('/api/auth/login', () =>
+    HttpResponse.json({ code: 'TELEGRAM_NOT_LINKED', message: '' }, { status: 409 })))
+  renderCard()
+  await typePhone('7787886432')
+  await userEvent.click(screen.getByRole('button', { name: 'Получить код' }))
+  expect(await screen.findByText(/Мы шлём код входа в Telegram/)).toBeInTheDocument()
+})
+
+test('«Изменить номер» возвращает на шаг телефона', async () => {
+  renderCard()
+  await typePhone('7787886432')
+  await userEvent.click(screen.getByRole('button', { name: 'Получить код' }))
+  await screen.findByLabelText('Код из Telegram')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Изменить номер' }))
+  expect(screen.getByTestId('phone-input')).toBeInTheDocument()
+  expect(screen.queryByLabelText('Код из Telegram')).not.toBeInTheDocument()
 })
 
 test('UNKNOWN_PHONE раскрывает форму заявки', async () => {
   server.use(http.post('/api/auth/login', () =>
     HttpResponse.json({ code: 'UNKNOWN_PHONE', message: '' }, { status: 401 })))
   renderCard()
-  await userEvent.type(screen.getByTestId('phone-input'), '9990009999')
-  await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
+  await typePhone('9990009999')
+  await userEvent.click(screen.getByRole('button', { name: 'Получить код' }))
   expect(await screen.findByText(/нет в списке гостей/)).toBeInTheDocument()
 
   await userEvent.type(screen.getByPlaceholderText(/зовут/), 'Незнакомец')
@@ -40,8 +79,8 @@ test('ALREADY_MEMBER в заявке показывает подсказку', a
       HttpResponse.json({ code: 'ALREADY_MEMBER', message: '' }, { status: 409 })),
   )
   renderCard()
-  await userEvent.type(screen.getByTestId('phone-input'), '9990008888')
-  await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
+  await typePhone('9990008888')
+  await userEvent.click(screen.getByRole('button', { name: 'Получить код' }))
   await userEvent.type(await screen.findByPlaceholderText(/зовут/), 'Свой')
   await userEvent.click(screen.getByRole('button', { name: 'Отправить заявку' }))
   expect(await screen.findByText(/уже в списке — просто войди/)).toBeInTheDocument()
@@ -51,18 +90,18 @@ test('RATE_LIMITED показывает «подожди минуту»', async 
   server.use(http.post('/api/auth/login', () =>
     HttpResponse.json({ code: 'RATE_LIMITED', message: '' }, { status: 429 })))
   renderCard()
-  await userEvent.type(screen.getByTestId('phone-input'), '9990007777')
-  await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
+  await typePhone('9990007777')
+  await userEvent.click(screen.getByRole('button', { name: 'Получить код' }))
   expect(await screen.findByText(/подожди минуту/)).toBeInTheDocument()
 })
 
-test('повторный вход сбрасывает состояние прошлой заявки', async () => {
+test('повторная отправка кода сбрасывает состояние прошлой заявки', async () => {
   server.use(http.post('/api/auth/login', () =>
     HttpResponse.json({ code: 'UNKNOWN_PHONE', message: '' }, { status: 401 })))
   renderCard()
 
-  await userEvent.type(screen.getByTestId('phone-input'), '9990001111')
-  await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
+  await typePhone('9990001111')
+  await userEvent.click(screen.getByRole('button', { name: 'Получить код' }))
   await userEvent.type(await screen.findByPlaceholderText(/зовут/), 'Незнакомец')
   await userEvent.click(screen.getByRole('button', { name: 'Отправить заявку' }))
   expect(await screen.findByText(/Заявка отправлена/)).toBeInTheDocument()
@@ -70,7 +109,7 @@ test('повторный вход сбрасывает состояние про
   const phoneInput = screen.getByTestId('phone-input')
   await userEvent.clear(phoneInput)
   await userEvent.type(phoneInput, '9990002222')
-  await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Получить код' }))
 
   const nameInput = await screen.findByPlaceholderText(/зовут/)
   expect(screen.queryByText(/Заявка отправлена/)).not.toBeInTheDocument()
