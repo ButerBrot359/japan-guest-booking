@@ -19,3 +19,4 @@ bot-service/bin/
 
 # SDD workspace
 .superpowers/
+.claude/worktrees/
