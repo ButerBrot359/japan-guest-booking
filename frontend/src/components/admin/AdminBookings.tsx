@@ -49,7 +49,8 @@ export function AdminBookings() {
       },
     })
   }
-  const cancelFailed = cancel.error instanceof ApiError && cancel.error.code !== 'BOOKING_EXPIRED'
+  const cancelFailed = cancel.error != null &&
+    !(cancel.error instanceof ApiError && cancel.error.code === 'BOOKING_EXPIRED')
 
   const rescheduleErrorText =
     reschedule.error instanceof ApiError

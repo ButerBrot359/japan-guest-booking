@@ -1,11 +1,21 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { CalendarDay } from '../../api/types'
 import type { PickOptions } from '../../lib/selection'
 import { type Selection } from '../Calendar'
 import { DateRangePicker } from './DateRangePicker'
+
+beforeEach(() => {
+  // фиксируем дату — как в App.flow.test.tsx: 03:00Z = полдень JST
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  vi.setSystemTime(new Date('2026-09-01T03:00:00Z'))
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 // в jsdom отрендерены и «мобильный», и «десктопный» календари — берём первую кнопку
 const dayButton = (label: RegExp) => screen.getAllByRole('button', { name: label })[0]

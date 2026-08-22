@@ -2,9 +2,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
-import { expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { mockState } from '../test/handlers'
 import { AdminPage } from './AdminPage'
+
+beforeEach(() => {
+  // фиксируем дату — как в App.flow.test.tsx: 03:00Z = полдень JST
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  vi.setSystemTime(new Date('2026-09-01T03:00:00Z'))
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })

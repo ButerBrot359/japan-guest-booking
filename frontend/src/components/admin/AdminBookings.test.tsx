@@ -2,10 +2,20 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { mockState } from '../../test/handlers'
 import { server } from '../../test/setup'
 import { AdminBookings } from './AdminBookings'
+
+beforeEach(() => {
+  // фиксируем дату — как в App.flow.test.tsx: 03:00Z = полдень JST
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  vi.setSystemTime(new Date('2026-09-01T03:00:00Z'))
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 function renderSection() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -55,6 +65,8 @@ test('перенос: выбор дат в модалке обновляет б�
   renderSection()
   await userEvent.click(await screen.findByRole('button', { name: 'Перенести' }))
   expect(screen.getByText(/Сейчас: 10\/09\/2026 → 12\/09\/2026/)).toBeInTheDocument()
+  // дни самой брони освобождены (daysWithoutBooking) — их можно выбрать заново
+  expect(screen.getAllByRole('button', { name: /^11 сентября/ })[0]).toBeEnabled()
   await userEvent.click(dayButton(/^20 сентября/))
   await userEvent.click(dayButton(/^23 сентября/))
   await userEvent.click(screen.getByRole('button', { name: 'Перенести бронь' }))
