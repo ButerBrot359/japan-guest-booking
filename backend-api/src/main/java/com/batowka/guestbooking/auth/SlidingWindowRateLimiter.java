@@ -25,16 +25,21 @@ public class SlidingWindowRateLimiter {
     /** true — попытка разрешена и учтена; false — лимит исчерпан. */
     public boolean tryAcquire(String key, int limit, Duration window) {
         Instant now = clock.instant();
-        Deque<Instant> q = attempts.computeIfAbsent(key, k -> new ArrayDeque<>());
-        synchronized (q) {
-            while (!q.isEmpty() && q.peekFirst().isBefore(now.minus(window))) {
-                q.pollFirst();
+        while (true) {
+            Deque<Instant> q = attempts.computeIfAbsent(key, k -> new ArrayDeque<>());
+            synchronized (q) {
+                if (attempts.get(key) != q) {
+                    continue; // эвикция выдернула deque между computeIfAbsent и локом — берём заново
+                }
+                while (!q.isEmpty() && q.peekFirst().isBefore(now.minus(window))) {
+                    q.pollFirst();
+                }
+                if (q.size() >= limit) {
+                    return false;
+                }
+                q.addLast(now);
+                return true;
             }
-            if (q.size() >= limit) {
-                return false;
-            }
-            q.addLast(now);
-            return true;
         }
     }
 
