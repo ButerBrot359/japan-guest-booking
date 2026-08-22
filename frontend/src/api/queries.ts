@@ -182,6 +182,10 @@ export function useSetGreetings() {
   return useMutation({
     mutationFn: ({ id, greetings }: { id: number; greetings: string[] }) =>
       api.put<void>(`/admin/users/${id}/greetings`, { greetings }),
-    onSuccess: (_r, { id }) => qc.invalidateQueries({ queryKey: ['admin', 'greetings', id] }),
+    onSuccess: (_r, { id }) => {
+      qc.invalidateQueries({ queryKey: ['admin', 'greetings', id] })
+      // колонка приветствий берётся из списка гостей — обновляем и его
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+    },
   })
 }

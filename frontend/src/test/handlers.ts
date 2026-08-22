@@ -135,7 +135,12 @@ export const handlers = [
     HttpResponse.json(mockState.guestGreetings[Number(params.id)] ?? [])),
   http.put('/api/admin/users/:id/greetings', async ({ params, request }) => {
     const { greetings } = (await request.json()) as { greetings: string[] }
-    mockState.guestGreetings[Number(params.id)] = greetings.filter((g) => g.trim() !== '')
+    const id = Number(params.id)
+    const cleaned = greetings.filter((g) => g.trim() !== '')
+    mockState.guestGreetings[id] = cleaned
+    // зеркалим бэкенд: список гостей отдаёт greetings из того же источника
+    const guest = mockState.adminGuests.find((g) => g.id === id)
+    if (guest) guest.greetings = cleaned
     return new HttpResponse(null, { status: 204 })
   }),
 ]
