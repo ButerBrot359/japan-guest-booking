@@ -22,6 +22,7 @@ import com.batowka.guestbooking.user.ActiveBookingExistsException;
 import com.batowka.guestbooking.user.AlreadyMemberException;
 import com.batowka.guestbooking.user.CannotDeleteAdminException;
 import com.batowka.guestbooking.user.UserNotFoundException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -34,7 +35,10 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @Slf4j
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
+
+    private final com.batowka.guestbooking.auth.AuthCookies authCookies;
 
     @ExceptionHandler(InvalidCalendarRangeException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
@@ -68,8 +72,7 @@ public class GlobalExceptionHandler {
         return org.springframework.http.ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
                 .header(org.springframework.http.HttpHeaders.SET_COOKIE,
-                        com.batowka.guestbooking.auth.AuthController
-                                .authCookie("", java.time.Duration.ZERO).toString())
+                        authCookies.expired().toString())
                 .body(new ApiError("UNAUTHORIZED", ex.getMessage()));
     }
 
