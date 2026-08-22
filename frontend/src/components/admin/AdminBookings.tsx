@@ -63,6 +63,13 @@ export function AdminBookings() {
 
   return (
     <div>
+      {/* вся история (включая отменённые) — в файле; в таблице ниже только активные */}
+      <a
+        href="/api/admin/bookings/export"
+        className="mb-3 inline-block rounded-lg border border-ink px-3 py-1.5 text-xs"
+      >
+        Выгрузить в Excel
+      </a>
       {active.length === 0 && !bookings.isLoading && (
         <p className="text-sm text-muted">Активных броней нет</p>
       )}

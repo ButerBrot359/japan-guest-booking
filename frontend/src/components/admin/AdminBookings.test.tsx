@@ -85,3 +85,10 @@ test('перенос на занятые даты показывает ошиб�
   await userEvent.click(screen.getByRole('button', { name: 'Перенести бронь' }))
   expect(await screen.findByText(/Эти даты заняты/)).toBeInTheDocument()
 })
+
+test('ссылка «Выгрузить в Excel» ведёт на export и видна даже без активных броней', async () => {
+  renderSection()
+  await screen.findByText('Активных броней нет')
+  const link = screen.getByRole('link', { name: 'Выгрузить в Excel' })
+  expect(link).toHaveAttribute('href', '/api/admin/bookings/export')
+})
