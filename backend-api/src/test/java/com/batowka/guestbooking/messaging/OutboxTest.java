@@ -110,4 +110,48 @@ class OutboxTest extends AbstractIntegrationTest {
             assertThat(found).isTrue();
         }
     }
+
+    @Test
+    void poisonedRowIsSkippedAndQueueMovesOn() {
+        jdbc.update("""
+                insert into outbox(topic, event_type, payload, attempts)
+                values ('bot-commands', 'POISON', '{"k":"v"}'::jsonb, 5)
+                """);
+        jdbc.update("""
+                insert into outbox(topic, event_type, payload)
+                values ('bot-commands', 'HEALTHY', '{"k":"v"}'::jsonb)
+                """);
+
+        // здоровая строка публикуется, ядовитая (attempts=5) не блокирует её и остаётся неопубликованной
+        org.awaitility.Awaitility.await().untilAsserted(() ->
+                org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
+                        "select published_at is not null from outbox where event_type = 'HEALTHY'",
+                        Boolean.class)).isTrue());
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
+                "select published_at is null from outbox where event_type = 'POISON'",
+                Boolean.class)).isTrue();
+    }
+
+    @Test
+    void cleanupDeletesOldPublishedRowsOnly() {
+        jdbc.update("""
+                insert into outbox(topic, event_type, payload, published_at)
+                values ('bot-commands', 'OLD_PUBLISHED', '{}'::jsonb, now() - interval '8 days')
+                """);
+        jdbc.update("""
+                insert into outbox(topic, event_type, payload, published_at)
+                values ('bot-commands', 'FRESH_PUBLISHED', '{}'::jsonb, now())
+                """);
+        jdbc.update("""
+                insert into outbox(topic, event_type, payload, created_at)
+                values ('bot-commands', 'OLD_UNPUBLISHED', '{}'::jsonb, now() - interval '30 days')
+                """);
+
+        publisher.cleanupPublished();
+
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForList(
+                        "select event_type from outbox where event_type like 'OLD_%' or event_type like 'FRESH_%'",
+                        String.class))
+                .containsExactlyInAnyOrder("FRESH_PUBLISHED", "OLD_UNPUBLISHED");
+    }
 }
