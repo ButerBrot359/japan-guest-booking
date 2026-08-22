@@ -34,5 +34,6 @@ class OutboxPublisherAttemptsTest {
 
         // счётчик инкрементнулся, published_at не трогали
         verify(jdbc).queryForObject(contains("attempts = attempts + 1"), eq(Integer.class), eq(1L));
+        verify(jdbc, org.mockito.Mockito.never()).update(contains("published_at"), org.mockito.ArgumentMatchers.<Object>any());
     }
 }

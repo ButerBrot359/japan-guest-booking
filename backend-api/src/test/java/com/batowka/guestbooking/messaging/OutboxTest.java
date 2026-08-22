@@ -115,14 +115,14 @@ class OutboxTest extends AbstractIntegrationTest {
     void poisonedRowIsSkippedAndQueueMovesOn() {
         jdbc.update("""
                 insert into outbox(topic, event_type, payload, attempts)
-                values ('bot-commands', 'POISON', '{"k":"v"}'::jsonb, 5)
-                """);
+                values ('bot-commands', 'POISON', '{"k":"v"}'::jsonb, %d)
+                """.formatted(OutboxPublisher.MAX_ATTEMPTS));
         jdbc.update("""
                 insert into outbox(topic, event_type, payload)
                 values ('bot-commands', 'HEALTHY', '{"k":"v"}'::jsonb)
                 """);
 
-        // здоровая строка публикуется, ядовитая (attempts=5) не блокирует её и остаётся неопубликованной
+        // здоровая строка публикуется, ядовитая (attempts=MAX_ATTEMPTS) не блокирует её и остаётся неопубликованной
         org.awaitility.Awaitility.await().untilAsserted(() ->
                 org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
                         "select published_at is not null from outbox where event_type = 'HEALTHY'",

@@ -53,6 +53,20 @@ class RateLimitFilterTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void verifyAndAdminLoginShareTheAuthBucketWithLogin() throws Exception {
+        // /verify и /admin-login — те же POST-эндпоинты бакета auth, что и /login: лимит общий на все три
+        for (int i = 0; i < 5; i++) {
+            postLogin("{\"phone\": \"+79990000001\"}");
+        }
+        mvc.perform(post("/api/auth/verify").contentType(APPLICATION_JSON)
+                        .content("{\"phone\": \"+79990000001\", \"code\": \"000000\"}"))
+                .andExpect(status().isTooManyRequests());
+        mvc.perform(post("/api/auth/admin-login").contentType(APPLICATION_JSON)
+                        .content("{\"phone\": \"+79990000001\", \"password\": \"x\"}"))
+                .andExpect(status().isTooManyRequests());
+    }
+
+    @Test
     void nonLimitedRequestsAreNotCounted() throws Exception {
         for (int i = 0; i < 10; i++) {
             mvc.perform(get("/api/calendar?from=2026-09-01&to=2026-09-30"));

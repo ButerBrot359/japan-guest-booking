@@ -18,7 +18,8 @@ public class OutboxPublisher {
     private final JdbcTemplate jdbc;
     private final KafkaTemplate<String, String> kafka;
 
-    static final int MAX_ATTEMPTS = 5;
+    // 50: ядовитая строка отваливается за минуты, а многочасовой простой Kafka переживается без потерь
+    static final int MAX_ATTEMPTS = 50;
 
     @Scheduled(fixedDelay = 2000)
     public void publishPending() {
