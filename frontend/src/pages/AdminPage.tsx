@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useLogout, useMe } from '../api/queries'
 import { AdminAccessRequests } from '../components/admin/AdminAccessRequests'
+import { AdminBlockedPeriods } from '../components/admin/AdminBlockedPeriods'
+import { AdminBookings } from '../components/admin/AdminBookings'
 import { AdminGuests } from '../components/admin/AdminGuests'
 import { AdminLoginCard } from '../components/admin/AdminLoginCard'
 
-type Tab = 'requests' | 'guests'
+type Tab = 'requests' | 'guests' | 'bookings' | 'blocked'
 
 export function AdminPage() {
   const me = useMe()
@@ -26,9 +28,13 @@ export function AdminPage() {
       <nav className="mb-5 flex gap-2">
         <button type="button" className={tabClass('requests')} onClick={() => setTab('requests')}>Заявки</button>
         <button type="button" className={tabClass('guests')} onClick={() => setTab('guests')}>Гости</button>
+        <button type="button" className={tabClass('bookings')} onClick={() => setTab('bookings')}>Брони</button>
+        <button type="button" className={tabClass('blocked')} onClick={() => setTab('blocked')}>Блокировки</button>
       </nav>
       {tab === 'requests' && <AdminAccessRequests />}
       {tab === 'guests' && <AdminGuests />}
+      {tab === 'bookings' && <AdminBookings />}
+      {tab === 'blocked' && <AdminBlockedPeriods />}
     </div>
   )
 }

@@ -48,3 +48,16 @@ test('уже вошедший админ сразу видит панель', as
   renderPage()
   expect(await screen.findByRole('button', { name: 'Заявки' })).toBeInTheDocument()
 })
+
+test('вкладки «Брони» и «Блокировки» открывают свои секции', async () => {
+  mockState.me = { phone: '+7', name: 'Админ', role: 'ADMIN', telegramLinked: true, greeting: null, activeBooking: null }
+  mockState.adminBookings = [
+    { id: 1, guestName: 'Маша', guestPhone: '+79990000001', checkIn: '2026-09-10',
+      checkOut: '2026-09-12', status: 'CONFIRMED', comment: null },
+  ]
+  renderPage()
+  await userEvent.click(await screen.findByRole('button', { name: 'Брони' }))
+  expect(await screen.findByTestId('admin-bookings')).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Блокировки' }))
+  expect(await screen.findByText('Закрытых дат нет')).toBeInTheDocument()
+})
