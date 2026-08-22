@@ -75,8 +75,6 @@ public class BookingsExcelWriter {
             case CONFIRMED -> "подтверждена";
             case CANCELLED -> "отменена";
             case COMPLETED -> "завершена";
-            // мёртвое значение: флоу удалён в 6.6, чистка enum — этап 8
-            case PENDING_OTP -> "не подтверждена";
         };
     }
 }

@@ -21,7 +21,7 @@ class UpdatedAtTriggerTest extends AbstractIntegrationTest {
                 Long.class);
         Long bookingId = jdbc.queryForObject("""
                 insert into bookings(user_id, check_in, check_out, status)
-                values (?, '2027-05-01', '2027-05-05', 'PENDING_OTP') returning id
+                values (?, '2027-05-01', '2027-05-05', 'CANCELLED') returning id
                 """, Long.class, userId);
         OffsetDateTime before = jdbc.queryForObject(
                 "select updated_at from bookings where id = ?", OffsetDateTime.class, bookingId);

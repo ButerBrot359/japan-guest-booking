@@ -59,7 +59,7 @@ class DatesRaceTest extends AbstractIntegrationTest {
 
             // инвариант: не «оба успели»
             Integer bookings = jdbc.queryForObject(
-                    "select count(*) from bookings where status in ('PENDING_OTP','CONFIRMED')", Integer.class);
+                    "select count(*) from bookings where status = 'CONFIRMED'", Integer.class);
             Integer blocks = jdbc.queryForObject(
                     "select count(*) from blocked_periods", Integer.class);
             assertThat(booked && blocked).as("обе стороны выиграли гонку").isFalse();
