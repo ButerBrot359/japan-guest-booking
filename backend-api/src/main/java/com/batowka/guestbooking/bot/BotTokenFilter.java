@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 
 /** Служебная аутентификация внутреннего бота: заголовок X-Bot-Token для /api/bot/**. */
@@ -27,8 +29,15 @@ public class BotTokenFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        // пустой конфиг-токен закрывает эндпоинт: заголовок никогда с ним не совпадёт
-        if (!token.isBlank() && token.equals(request.getHeader("X-Bot-Token"))) {
+        // фильтр касается только бот-эндпоинтов — на прочих путях служебный токен ничего не значит
+        if (!request.getRequestURI().startsWith("/api/bot/")) {
+            chain.doFilter(request, response);
+            return;
+        }
+        String header = request.getHeader("X-Bot-Token");
+        // пустой конфиг-токен закрывает эндпоинт; сравнение — constant-time (MessageDigest.isEqual)
+        if (!token.isBlank() && header != null && MessageDigest.isEqual(
+                token.getBytes(StandardCharsets.UTF_8), header.getBytes(StandardCharsets.UTF_8))) {
             var auth = new UsernamePasswordAuthenticationToken(
                     "bot", null, List.of(new SimpleGrantedAuthority("ROLE_BOT")));
             SecurityContextHolder.getContext().setAuthentication(auth);
