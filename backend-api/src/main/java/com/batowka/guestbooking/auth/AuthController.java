@@ -3,7 +3,6 @@ package com.batowka.guestbooking.auth;
 import com.batowka.guestbooking.user.Role;
 import com.batowka.guestbooking.user.UserAccount;
 import com.batowka.guestbooking.user.UserAccountRepository;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +27,6 @@ public class AuthController {
     private final UserAccountRepository users;
     private final JwtService jwt;
     private final PasswordEncoder encoder;
-    private final LoginRateLimiter rateLimiter;
     private final LoginService loginService;
 
     public record LoginRequest(@NotBlank String phone) {
@@ -41,21 +39,18 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Void> login(@Valid @RequestBody LoginRequest body, HttpServletRequest request) {
-        rateLimiter.check(request.getRemoteAddr());
+    public ResponseEntity<Void> login(@Valid @RequestBody LoginRequest body) {
         loginService.requestCode(body.phone());
         return ResponseEntity.accepted().build();
     }
 
     @PostMapping("/verify")
-    public ResponseEntity<Void> verify(@Valid @RequestBody VerifyRequest body, HttpServletRequest request) {
-        rateLimiter.check(request.getRemoteAddr());
+    public ResponseEntity<Void> verify(@Valid @RequestBody VerifyRequest body) {
         return noContentWithCookie(loginService.verify(body.phone(), body.code()), COOKIE_TTL);
     }
 
     @PostMapping("/admin-login")
-    public ResponseEntity<Void> adminLogin(@Valid @RequestBody AdminLoginRequest body, HttpServletRequest request) {
-        rateLimiter.check(request.getRemoteAddr());
+    public ResponseEntity<Void> adminLogin(@Valid @RequestBody AdminLoginRequest body) {
         // Единый 401 на любой провал: не раскрываем, что именно не совпало
         UserAccount admin = Phones.normalize(body.phone())
                 .flatMap(users::findByPhoneAndDeletedAtIsNull)

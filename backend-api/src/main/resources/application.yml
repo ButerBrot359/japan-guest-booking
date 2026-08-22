@@ -1,3 +1,7 @@
+server:
+  # за nginx getRemoteAddr() читает X-Forwarded-For; при прямом доступе (dev) ничего не меняет
+  forward-headers-strategy: native
+
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/guestbooking

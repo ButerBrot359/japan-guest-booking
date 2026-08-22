@@ -1,7 +1,5 @@
 package com.batowka.guestbooking.accessrequest;
 
-import com.batowka.guestbooking.auth.LoginRateLimiter;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -15,7 +13,6 @@ import org.springframework.web.bind.annotation.*;
 public class AccessRequestController {
 
     private final AccessRequestService service;
-    private final LoginRateLimiter rateLimiter;
 
     public record SubmitRequest(@NotBlank String phone, @NotBlank @Size(max = 100) String name,
                                 @Size(max = 500) String message) {
@@ -23,9 +20,7 @@ public class AccessRequestController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public void submit(@Valid @RequestBody SubmitRequest body, HttpServletRequest request) {
-        // сайт публичный — форму обстреливают; общий бакет с логином: 5/мин с IP
-        rateLimiter.check(request.getRemoteAddr());
+    public void submit(@Valid @RequestBody SubmitRequest body) {
         service.submit(body.phone(), body.name(), body.message());
     }
 }

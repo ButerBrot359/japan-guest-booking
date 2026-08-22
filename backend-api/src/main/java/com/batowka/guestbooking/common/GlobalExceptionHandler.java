@@ -4,7 +4,6 @@ import com.batowka.guestbooking.accessrequest.AccessRequestNotFoundException;
 import com.batowka.guestbooking.accessrequest.AlreadyResolvedException;
 import com.batowka.guestbooking.auth.InvalidCredentialsException;
 import com.batowka.guestbooking.auth.InvalidPhoneException;
-import com.batowka.guestbooking.auth.RateLimitExceededException;
 import com.batowka.guestbooking.auth.UnknownPhoneException;
 import com.batowka.guestbooking.booking.BookingExpiredException;
 import com.batowka.guestbooking.booking.BookingNotFoundException;
@@ -96,12 +95,6 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiError unreadableBody(HttpMessageNotReadableException ex) {
         return new ApiError("VALIDATION_ERROR", "Тело запроса не читается");
-    }
-
-    @ExceptionHandler(RateLimitExceededException.class)
-    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
-    public ApiError rateLimited(RateLimitExceededException ex) {
-        return new ApiError("RATE_LIMITED", ex.getMessage());
     }
 
     @ExceptionHandler(InvalidCodeException.class)

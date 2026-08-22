@@ -27,6 +27,7 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
     private final BotTokenFilter botTokenFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final ObjectMapper objectMapper;
 
     @Bean
@@ -48,7 +49,8 @@ public class SecurityConfig {
                 // JwtAuthFilter регистрируется первым, чтобы у него появился известный порядок —
                 // иначе addFilterBefore(botTokenFilter, JwtAuthFilter.class) не знает, куда встать.
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(botTokenFilter, JwtAuthFilter.class);
+                .addFilterBefore(botTokenFilter, JwtAuthFilter.class)
+                .addFilterBefore(rateLimitFilter, BotTokenFilter.class);
         return http.build();
     }
 
@@ -63,10 +65,5 @@ public class SecurityConfig {
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
-    }
-
-    @Bean
-    java.time.Clock clock() {
-        return java.time.Clock.systemUTC();
     }
 }
