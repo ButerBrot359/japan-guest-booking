@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from './client'
 import type {
   AccessRequestRow, AccessRequestStatus, AdminUserRow, CalendarResponse, CreateResult, Me, MyBookings,
+  AdminBookingRow, BlockedPeriodRow,
 } from './types'
 
 export function useCalendar(fromIso: string, toIso: string) {
@@ -186,6 +187,67 @@ export function useSetGreetings() {
       qc.invalidateQueries({ queryKey: ['admin', 'greetings', id] })
       // колонка приветствий берётся из списка гостей — обновляем и его
       qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+    },
+  })
+}
+
+export function useAdminBookings() {
+  return useQuery({
+    queryKey: ['admin', 'bookings'],
+    queryFn: () => api.get<AdminBookingRow[]>('/admin/bookings'),
+  })
+}
+
+export function useAdminCancelBooking() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.post<void>(`/admin/bookings/${id}/cancel`),
+    // onSettled, а не onSuccess: 409 «уже отменена» — нормальный исход, список должен обновиться
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'bookings'] })
+      qc.invalidateQueries({ queryKey: ['calendar'] })
+    },
+  })
+}
+
+export function useAdminRescheduleBooking() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, checkIn, checkOut }: { id: number; checkIn: string; checkOut: string }) =>
+      api.post<void>(`/admin/bookings/${id}/reschedule`, { checkIn, checkOut }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'bookings'] })
+      qc.invalidateQueries({ queryKey: ['calendar'] })
+    },
+  })
+}
+
+export function useAdminBlockedPeriods() {
+  return useQuery({
+    queryKey: ['admin', 'blocked-periods'],
+    queryFn: () => api.get<BlockedPeriodRow[]>('/admin/blocked-periods'),
+  })
+}
+
+export function useAdminCreateBlockedPeriod() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { startDate: string; endDate: string; reason?: string }) =>
+      api.post<BlockedPeriodRow>('/admin/blocked-periods', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'blocked-periods'] })
+      qc.invalidateQueries({ queryKey: ['calendar'] })
+    },
+  })
+}
+
+export function useAdminDeleteBlockedPeriod() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.del<void>(`/admin/blocked-periods/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'blocked-periods'] })
+      qc.invalidateQueries({ queryKey: ['calendar'] })
     },
   })
 }
