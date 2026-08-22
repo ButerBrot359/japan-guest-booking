@@ -5,16 +5,22 @@ import com.batowka.guestbooking.auth.JwtAuthFilter;
 import com.batowka.guestbooking.auth.JwtService;
 import com.batowka.guestbooking.user.Role;
 import jakarta.servlet.http.Cookie;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.io.ByteArrayInputStream;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -114,5 +120,33 @@ class AdminBookingTest extends AbstractIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "select status || ':' || cancelled_by from bookings where id = " + id, String.class))
                 .isEqualTo("CANCELLED:ADMIN");
+    }
+
+    @Test
+    void exportОтдаётXlsxСоВсемиБронямиВключаяОтменённые() throws Exception {
+        long cancelled = confirmedBooking("+81380000006", 779406L, "2028-07-01", "2028-07-05");
+        jdbc.update("update bookings set status = 'CANCELLED', cancelled_by = 'ADMIN' where id = ?", cancelled);
+        confirmedBooking("+81380000007", 779407L, "2028-08-01", "2028-08-05");
+
+        var res = mvc.perform(get("/api/admin/bookings/export").cookie(adminAuth()))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .andExpect(header().string("Content-Disposition", containsString("bookings-")))
+                .andExpect(header().string("Content-Disposition", containsString(".xlsx")))
+                .andReturn();
+
+        try (XSSFWorkbook wb = new XSSFWorkbook(
+                new ByteArrayInputStream(res.getResponse().getContentAsByteArray()))) {
+            Sheet sheet = wb.getSheet("Брони");
+            // шапка + обе брони: отменённая тоже в файле
+            assertThat(sheet.getLastRowNum()).isEqualTo(2);
+        }
+    }
+
+    @Test
+    void exportБезКукиДаётUnauthorized() throws Exception {
+        mvc.perform(get("/api/admin/bookings/export"))
+                .andExpect(status().isUnauthorized());
     }
 }
