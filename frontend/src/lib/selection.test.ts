@@ -50,3 +50,23 @@ test('занятый день выезда не даёт закрыть диап
   expect(pickDay({ checkIn: '2026-09-10', checkOut: null }, '2026-09-12', days(['2026-09-12'])))
     .toEqual({ checkIn: '2026-09-12', checkOut: null })
 })
+
+test('повторный клик по заезду без allowSingleDay — просто новый заезд', () => {
+  expect(pickDay({ checkIn: '2026-09-10', checkOut: null }, '2026-09-10', days([])))
+    .toEqual({ checkIn: '2026-09-10', checkOut: null })
+})
+
+test('allowSingleDay: повторный клик по заезду даёт один день', () => {
+  expect(pickDay({ checkIn: '2026-09-10', checkOut: null }, '2026-09-10', days([]), { allowSingleDay: true }))
+    .toEqual({ checkIn: '2026-09-10', checkOut: '2026-09-10' })
+})
+
+test('maxNights: Infinity — диапазон длиннее 14 ночей собирается', () => {
+  expect(pickDay({ checkIn: '2026-09-01', checkOut: null }, '2026-10-15', days([]), { maxNights: Infinity }))
+    .toEqual({ checkIn: '2026-09-01', checkOut: '2026-10-15' })
+})
+
+test('maxNights: Infinity не отключает проверку занятости', () => {
+  expect(pickDay({ checkIn: '2026-09-01', checkOut: null }, '2026-10-15', days(['2026-09-20']), { maxNights: Infinity }))
+    .toEqual({ checkIn: '2026-10-15', checkOut: null })
+})

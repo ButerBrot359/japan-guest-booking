@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { expect, test } from 'vitest'
 import { mockState } from '../test/handlers'
-import { useAccessRequests, useAdminGuests } from './queries'
+import { useAccessRequests, useAdminGuests, useAdminBookings, useAdminBlockedPeriods } from './queries'
 
 function wrapper({ children }: { children: ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -26,4 +26,21 @@ test('useAccessRequests фильтрует по статусу', async () => {
   const { result } = renderHook(() => useAccessRequests('PENDING'), { wrapper })
   await waitFor(() => expect(result.current.data?.length).toBe(1))
   expect(result.current.data?.[0].name).toBe('A')
+})
+
+test('useAdminBookings отдаёт брони из API', async () => {
+  mockState.adminBookings = [
+    { id: 1, guestName: 'Маша', guestPhone: '+79990000001', checkIn: '2026-09-10',
+      checkOut: '2026-09-12', status: 'CONFIRMED', comment: null },
+  ]
+  const { result } = renderHook(() => useAdminBookings(), { wrapper })
+  await waitFor(() => expect(result.current.data?.[0].guestName).toBe('Маша'))
+})
+
+test('useAdminBlockedPeriods отдаёт периоды из API', async () => {
+  mockState.blockedPeriods = [
+    { id: 1, startDate: '2026-09-01', endDate: '2026-09-03', reason: 'ремонт', createdAt: '2026-08-22T00:00:00Z' },
+  ]
+  const { result } = renderHook(() => useAdminBlockedPeriods(), { wrapper })
+  await waitFor(() => expect(result.current.data?.[0].reason).toBe('ремонт'))
 })

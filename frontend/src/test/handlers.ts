@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import type { AccessRequestRow, AdminUserRow, CalendarDay, Me, PastVisit } from '../api/types'
+import type { AccessRequestRow, AdminUserRow, CalendarDay, Me, PastVisit, AdminBookingRow, BlockedPeriodRow } from '../api/types'
 
 export interface MockState {
   me: Me | null
@@ -11,11 +11,14 @@ export interface MockState {
   accessRequests: AccessRequestRow[]
   guestGreetings: Record<number, string[]>
   adminPassword: string   // пароль, который мок считает верным
+  adminBookings: AdminBookingRow[]
+  blockedPeriods: BlockedPeriodRow[]
 }
 
 export const mockState: MockState = {
   me: null, days: [], history: [], comment: null, pendingLoginPhone: null,
   adminGuests: [], accessRequests: [], guestGreetings: {}, adminPassword: 'admin',
+  adminBookings: [], blockedPeriods: [],
 }
 
 /** Запросы к /api/calendar, зафиксированные для проверки диапазона дат в тестах. */
@@ -31,6 +34,8 @@ export function resetMockState() {
   mockState.accessRequests = []
   mockState.guestGreetings = {}
   mockState.adminPassword = 'admin'
+  mockState.adminBookings = []
+  mockState.blockedPeriods = []
   capturedCalendarRequests.length = 0
 }
 
@@ -141,6 +146,37 @@ export const handlers = [
     // зеркалим бэкенд: список гостей отдаёт greetings из того же источника
     const guest = mockState.adminGuests.find((g) => g.id === id)
     if (guest) guest.greetings = cleaned
+    return new HttpResponse(null, { status: 204 })
+  }),
+  http.get('/api/admin/bookings', () => HttpResponse.json(mockState.adminBookings)),
+  http.post('/api/admin/bookings/:id/cancel', ({ params }) => {
+    const b = mockState.adminBookings.find((x) => x.id === Number(params.id))
+    if (!b || b.status !== 'CONFIRMED') {
+      return HttpResponse.json({ code: 'BOOKING_EXPIRED', message: 'Бронь уже неактивна' }, { status: 409 })
+    }
+    b.status = 'CANCELLED'
+    return new HttpResponse(null, { status: 204 })
+  }),
+  http.post('/api/admin/bookings/:id/reschedule', async ({ params, request }) => {
+    const { checkIn, checkOut } = (await request.json()) as { checkIn: string; checkOut: string }
+    const b = mockState.adminBookings.find((x) => x.id === Number(params.id))
+    if (b) { b.checkIn = checkIn; b.checkOut = checkOut }
+    return new HttpResponse(null, { status: 204 })
+  }),
+  http.get('/api/admin/blocked-periods', () => HttpResponse.json(mockState.blockedPeriods)),
+  http.post('/api/admin/blocked-periods', async ({ request }) => {
+    const { startDate, endDate, reason } =
+      (await request.json()) as { startDate: string; endDate: string; reason?: string }
+    const row: BlockedPeriodRow = {
+      id: mockState.blockedPeriods.length + 1,
+      startDate, endDate, reason: reason ?? null, createdAt: '2026-08-22T00:00:00Z',
+    }
+    mockState.blockedPeriods.push(row)
+    return HttpResponse.json(row, { status: 201 })
+  }),
+  http.delete('/api/admin/blocked-periods/:id', ({ params }) => {
+    const i = mockState.blockedPeriods.findIndex((x) => x.id === Number(params.id))
+    if (i >= 0) mockState.blockedPeriods.splice(i, 1)
     return new HttpResponse(null, { status: 204 })
   }),
 ]

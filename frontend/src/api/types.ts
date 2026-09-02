@@ -24,3 +24,16 @@ export interface AccessRequestRow {
   id: number; phone: string; name: string; message: string | null
   status: AccessRequestStatus; createdAt: string; resolvedAt: string | null
 }
+export interface AdminBookingRow {
+  id: number; guestName: string; guestPhone: string
+  checkIn: string   // ISO yyyy-MM-dd
+  checkOut: string  // ISO, занят включительно
+  status: BookingStatus; comment: string | null
+}
+export interface BlockedPeriodRow {
+  id: number
+  startDate: string  // ISO
+  endDate: string    // ISO, включительно
+  reason: string | null
+  createdAt: string  // ISO instant
+}
