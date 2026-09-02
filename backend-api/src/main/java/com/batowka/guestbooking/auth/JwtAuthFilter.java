@@ -29,7 +29,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
         Cookie[] cookies = request.getCookies();
-        if (cookies != null) {
+        if (cookies != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            // BotTokenFilter мог уже аутентифицировать бота — кука не перетирает служебную роль
             Arrays.stream(cookies)
                     .filter(c -> COOKIE_NAME.equals(c.getName()))
                     .findFirst()

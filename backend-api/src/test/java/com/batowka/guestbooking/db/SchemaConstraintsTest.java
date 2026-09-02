@@ -93,4 +93,15 @@ class SchemaConstraintsTest extends AbstractIntegrationTest {
                 createBooking(masha, "2027-03-05", "2027-03-05", "CONFIRMED"))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
+
+    @Test
+    void pendingOtpStatusIsRejectedByCheckConstraint() {
+        Long userId = jdbc.queryForObject(
+                "insert into users(phone, name) values ('+81999000901', 'Тест') returning id", Long.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                insert into bookings(user_id, check_in, check_out, status)
+                values (?, '2029-01-10', '2029-01-12', 'PENDING_OTP')
+                """, userId))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
 }

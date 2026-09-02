@@ -50,7 +50,7 @@ public abstract class AbstractIntegrationTest {
     private ObjectProvider<com.batowka.guestbooking.auth.AdminSeeder> adminSeeder;
 
     @Autowired
-    private ObjectProvider<com.batowka.guestbooking.auth.LoginRateLimiter> rateLimiter;
+    private ObjectProvider<com.batowka.guestbooking.auth.SlidingWindowRateLimiter> rateLimiter;
 
     @BeforeEach
     void cleanDatabase() {
@@ -60,6 +60,6 @@ public abstract class AbstractIntegrationTest {
                     RESTART IDENTITY CASCADE
                 """);
         adminSeeder.ifAvailable(com.batowka.guestbooking.auth.AdminSeeder::seed);
-        rateLimiter.ifAvailable(com.batowka.guestbooking.auth.LoginRateLimiter::reset);
+        rateLimiter.ifAvailable(com.batowka.guestbooking.auth.SlidingWindowRateLimiter::reset);
     }
 }

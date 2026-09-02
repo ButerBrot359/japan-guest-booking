@@ -1,8 +1,12 @@
 package com.batowka.guestbooking.calendar;
 
+import com.batowka.guestbooking.auth.AuthCookies;
 import com.batowka.guestbooking.auth.JwtAuthFilter;
 import com.batowka.guestbooking.auth.JwtService;
+import com.batowka.guestbooking.auth.RateLimitFilter;
 import com.batowka.guestbooking.auth.SecurityConfig;
+import com.batowka.guestbooking.auth.SlidingWindowRateLimiter;
+import com.batowka.guestbooking.common.ClockConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -20,7 +24,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(CalendarController.class)
-@Import({SecurityConfig.class, JwtAuthFilter.class, JwtService.class})
+// RateLimitFilter/SlidingWindowRateLimiter/ClockConfig — тоже подхватываются срезом как Filter-бины
+// (см. BotTokenFilter выше), но их конструкторские зависимости срез сам не создаёт;
+// AuthCookies нужен GlobalExceptionHandler (RestControllerAdvice), который срез тоже подхватывает
+@Import({SecurityConfig.class, JwtAuthFilter.class, JwtService.class,
+        RateLimitFilter.class, SlidingWindowRateLimiter.class, ClockConfig.class, AuthCookies.class})
 class CalendarControllerTest {
 
     @Autowired

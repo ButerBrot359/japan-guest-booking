@@ -1,3 +1,7 @@
+server:
+  # за nginx getRemoteAddr() читает X-Forwarded-For; при прямом доступе (dev) ничего не меняет
+  forward-headers-strategy: native
+
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/guestbooking
@@ -22,6 +26,9 @@ app:
     # dev-заглушка; боевой секрет придёт из .env на этапе 8 (в git не попадает)
     secret: dev-secret-change-me-0123456789abcdef
     ttl-days: 30
+  cookie:
+    # Secure включит прод (HTTPS) через APP_COOKIE_SECURE=true — этап 8.2
+    secure: ${APP_COOKIE_SECURE:false}
   admin:
     # dev-заглушки; боевые значения придут из .env на этапе 8
     phone: "+818000000000"

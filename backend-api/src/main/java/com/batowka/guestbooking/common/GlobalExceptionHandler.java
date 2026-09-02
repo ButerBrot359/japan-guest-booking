@@ -4,7 +4,6 @@ import com.batowka.guestbooking.accessrequest.AccessRequestNotFoundException;
 import com.batowka.guestbooking.accessrequest.AlreadyResolvedException;
 import com.batowka.guestbooking.auth.InvalidCredentialsException;
 import com.batowka.guestbooking.auth.InvalidPhoneException;
-import com.batowka.guestbooking.auth.RateLimitExceededException;
 import com.batowka.guestbooking.auth.UnknownPhoneException;
 import com.batowka.guestbooking.booking.BookingExpiredException;
 import com.batowka.guestbooking.booking.BookingNotFoundException;
@@ -23,6 +22,7 @@ import com.batowka.guestbooking.user.ActiveBookingExistsException;
 import com.batowka.guestbooking.user.AlreadyMemberException;
 import com.batowka.guestbooking.user.CannotDeleteAdminException;
 import com.batowka.guestbooking.user.UserNotFoundException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -35,7 +35,10 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @Slf4j
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
+
+    private final com.batowka.guestbooking.auth.AuthCookies authCookies;
 
     @ExceptionHandler(InvalidCalendarRangeException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
@@ -69,8 +72,7 @@ public class GlobalExceptionHandler {
         return org.springframework.http.ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
                 .header(org.springframework.http.HttpHeaders.SET_COOKIE,
-                        com.batowka.guestbooking.auth.AuthController
-                                .authCookie("", java.time.Duration.ZERO).toString())
+                        authCookies.expired().toString())
                 .body(new ApiError("UNAUTHORIZED", ex.getMessage()));
     }
 
@@ -96,12 +98,6 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiError unreadableBody(HttpMessageNotReadableException ex) {
         return new ApiError("VALIDATION_ERROR", "Тело запроса не читается");
-    }
-
-    @ExceptionHandler(RateLimitExceededException.class)
-    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
-    public ApiError rateLimited(RateLimitExceededException ex) {
-        return new ApiError("RATE_LIMITED", ex.getMessage());
     }
 
     @ExceptionHandler(InvalidCodeException.class)

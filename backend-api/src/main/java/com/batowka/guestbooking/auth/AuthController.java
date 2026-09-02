@@ -3,7 +3,6 @@ package com.batowka.guestbooking.auth;
 import com.batowka.guestbooking.user.Role;
 import com.batowka.guestbooking.user.UserAccount;
 import com.batowka.guestbooking.user.UserAccountRepository;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,20 +15,21 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Duration;
-
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
-    static final Duration COOKIE_TTL = Duration.ofDays(30);
+    /** Хеш строки "password" — публичный BCrypt-тест-вектор. Результат сравнения игнорируется:
+        нужен только прогон BCrypt, чтобы время ответа не выдавало, существует ли номер. */
+    static final String DUMMY_HASH =
+            "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
 
     private final UserAccountRepository users;
     private final JwtService jwt;
     private final PasswordEncoder encoder;
-    private final LoginRateLimiter rateLimiter;
     private final LoginService loginService;
+    private final AuthCookies cookies;
 
     public record LoginRequest(@NotBlank String phone) {
     }
@@ -41,48 +41,40 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Void> login(@Valid @RequestBody LoginRequest body, HttpServletRequest request) {
-        rateLimiter.check(request.getRemoteAddr());
+    public ResponseEntity<Void> login(@Valid @RequestBody LoginRequest body) {
         loginService.requestCode(body.phone());
         return ResponseEntity.accepted().build();
     }
 
     @PostMapping("/verify")
-    public ResponseEntity<Void> verify(@Valid @RequestBody VerifyRequest body, HttpServletRequest request) {
-        rateLimiter.check(request.getRemoteAddr());
-        return noContentWithCookie(loginService.verify(body.phone(), body.code()), COOKIE_TTL);
+    public ResponseEntity<Void> verify(@Valid @RequestBody VerifyRequest body) {
+        return noContent(cookies.session(loginService.verify(body.phone(), body.code())));
     }
 
     @PostMapping("/admin-login")
-    public ResponseEntity<Void> adminLogin(@Valid @RequestBody AdminLoginRequest body, HttpServletRequest request) {
-        rateLimiter.check(request.getRemoteAddr());
-        // Единый 401 на любой провал: не раскрываем, что именно не совпало
+    public ResponseEntity<Void> adminLogin(@Valid @RequestBody AdminLoginRequest body) {
         UserAccount admin = Phones.normalize(body.phone())
                 .flatMap(users::findByPhoneAndDeletedAtIsNull)
                 .filter(u -> u.getRole() == Role.ADMIN)
-                .filter(u -> u.getPasswordHash() != null
-                        && encoder.matches(body.password(), u.getPasswordHash()))
-                .orElseThrow(InvalidCredentialsException::new);
-        return noContentWithCookie(jwt.issue(admin.getId(), admin.getRole()), COOKIE_TTL);
+                .filter(u -> u.getPasswordHash() != null)
+                .orElse(null);
+        // Единый 401 и одинаковое время на любой провал: BCrypt прогоняется всегда
+        boolean matches = encoder.matches(body.password(),
+                admin != null ? admin.getPasswordHash() : DUMMY_HASH);
+        if (admin == null || !matches) {
+            throw new InvalidCredentialsException();
+        }
+        return noContent(cookies.session(jwt.issue(admin.getId(), admin.getRole())));
     }
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout() {
-        return noContentWithCookie("", Duration.ZERO);
+        return noContent(cookies.expired());
     }
 
-    public static ResponseCookie authCookie(String value, Duration maxAge) {
-        return ResponseCookie.from(JwtAuthFilter.COOKIE_NAME, value)
-                .httpOnly(true)
-                .sameSite("Lax")
-                .path("/")
-                .maxAge(maxAge)
-                .build();
-    }
-
-    public static ResponseEntity<Void> noContentWithCookie(String token, Duration maxAge) {
+    private ResponseEntity<Void> noContent(ResponseCookie cookie) {
         return ResponseEntity.noContent()
-                .header(HttpHeaders.SET_COOKIE, authCookie(token, maxAge).toString())
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
                 .build();
     }
 }

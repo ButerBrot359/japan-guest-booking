@@ -39,7 +39,7 @@ class BookingRepositoryTest extends AbstractIntegrationTest {
 
         List<Booking> found = bookings.findOverlapping(
                 LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-31"),
-                List.of(BookingStatus.PENDING_OTP, BookingStatus.CONFIRMED));
+                List.of(BookingStatus.CONFIRMED));
 
         assertThat(found).hasSize(1);
         assertThat(found.getFirst().getUser().getName()).isEqualTo("Маша");
